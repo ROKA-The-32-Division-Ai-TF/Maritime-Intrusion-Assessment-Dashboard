@@ -56,6 +56,8 @@ const HARBOR_STORAGE_KEY = "maritime-dashboard-harbors";
 const WINDY_EMBED_BASE_URL = "https://embed.windy.com/embed2.html";
 const OPEN_METEO_WEATHER_URL = "https://api.open-meteo.com/v1/forecast";
 const OPEN_METEO_MARINE_URL = "https://marine-api.open-meteo.com/v1/marine";
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
+const DIVISION_MARK_SRC = `${BASE_PATH}/assets/22.svg`;
 
 type RegionKey = "dangjin" | "taean" | "boryeong" | "seocheon";
 type WeatherKind = "sun" | "partly" | "cloud" | "rain";
@@ -1590,7 +1592,7 @@ function LoginScreen({ onEnter }: { onEnter: () => void }) {
       <section className="login-panel" aria-label="로그인">
         <Image
           className="login-emblem"
-          src="/assets/32div-emblem.svg"
+          src={DIVISION_MARK_SRC}
           alt="제32보병사단"
           width={150}
           height={180}
@@ -2088,7 +2090,7 @@ function DashboardScreen({ onLogout }: { onLogout: () => void }) {
         <div className="brand">
           <Image
             className="brand-logo"
-            src="/assets/22.svg"
+            src={DIVISION_MARK_SRC}
             alt="제32보병사단"
             width={52}
             height={52}
