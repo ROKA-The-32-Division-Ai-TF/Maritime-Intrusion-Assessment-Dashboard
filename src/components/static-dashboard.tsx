@@ -5343,8 +5343,10 @@ function approximateLunarLabel(day: number) {
 }
 
 function moonlightLabel(day: number) {
-  const phaseIndex = Math.floor(((day - 1) % 30) / 5);
-  return ["그믐", "초승", "상현", "보름", "하현", "월말"][phaseIndex] || "월말";
+  const lunarDay = ((day + 13) % 30) + 1;
+  const angle = ((lunarDay - 1) / 29.53) * Math.PI * 2;
+  const illumination = Math.round(((1 - Math.cos(angle)) / 2) * 100);
+  return `${Math.max(0, Math.min(100, illumination))}%`;
 }
 
 function shiftedTideValue(primary: string, secondary: string | undefined, dayIndex: number) {
@@ -5588,7 +5590,114 @@ function MarineMonthlyAnalysisView({
             </tbody>
           </table>
         </div>
+        <div className="analysis-mobile-list monthly-mobile-list" aria-label="모바일 월간 기상분석표">
+          {monthRows.map((row) => (
+            <article key={`mobile-${row.dateLabel}`} className={`analysis-mobile-card ${row.isToday ? "current" : ""}`}>
+              <header>
+                <div>
+                  <strong>{row.dateLabel}</strong>
+                  <span>{row.tideAge} · 월광 {row.moonlight}</span>
+                </div>
+              </header>
+              <div className="mobile-astro-grid">
+                <div>
+                  <span>BMNT/EENT</span>
+                  <strong>{row.bmntEent}</strong>
+                </div>
+                <div>
+                  <span>일출/일몰</span>
+                  <strong>{row.sunriseSunset}</strong>
+                </div>
+                <div>
+                  <span>월출/월몰</span>
+                  <strong>{row.moonriseMoonset}</strong>
+                </div>
+                <div>
+                  <span>음력</span>
+                  <strong>{row.lunarLabel}</strong>
+                </div>
+              </div>
+              <div className="mobile-tide-list" aria-label={`${row.dateLabel} 위치별 조석`}>
+                {analysisSources.map((source) => (
+                  <section key={`${row.dateLabel}-${source.region.key}`} className="mobile-tide-card">
+                    <div>
+                      <strong>{source.region.name}</strong>
+                      <span>{source.region.harborName}</span>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>만조</dt>
+                        <dd>{row.tides[source.region.key].high}</dd>
+                      </div>
+                      <div>
+                        <dt>간조</dt>
+                        <dd>{row.tides[source.region.key].low}</dd>
+                      </div>
+                    </dl>
+                  </section>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
       </article>
+    </section>
+  );
+}
+
+function MarineAssessmentMobileGroup({
+  title,
+  emptyMessage,
+  rows,
+}: {
+  title: string;
+  emptyMessage: string;
+  rows: MarineAssessmentTableRow[];
+}) {
+  return (
+    <section className="assessment-mobile-group" aria-label={`${title} 모바일 보기`}>
+      <h3>{title}</h3>
+      {rows.length ? (
+        rows.map((row) => (
+          <article key={`mobile-${title}-${row.label}`} className={`assessment-mobile-card ${row.evaluationLevel}`}>
+            <header>
+              <div>
+                <strong>{row.label}</strong>
+                <span>{row.overview} · {row.visibility}</span>
+              </div>
+              <span className={`assessment-badge ${row.evaluationLevel}`}>{row.evaluation}</span>
+            </header>
+            <dl>
+              <div>
+                <dt>특보</dt>
+                <dd>{row.alert}</dd>
+              </div>
+              <div>
+                <dt>파고</dt>
+                <dd>{row.wavePrimary} / {row.waveSecondary}</dd>
+              </div>
+              <div>
+                <dt>물때</dt>
+                <dd>{row.tideAge}</dd>
+              </div>
+              <div>
+                <dt>창조류</dt>
+                <dd>{row.current}</dd>
+              </div>
+              <div>
+                <dt>수온</dt>
+                <dd>{row.waterTemp}</dd>
+              </div>
+              <div>
+                <dt>취약시기</dt>
+                <dd>{row.vulnerableTime}</dd>
+              </div>
+            </dl>
+          </article>
+        ))
+      ) : (
+        <p>{emptyMessage}</p>
+      )}
     </section>
   );
 }
@@ -5707,6 +5816,18 @@ function MarineAccessAssessmentView({
           <MarineAssessmentMatrix
             title="접안 가능여부 평가 지표"
             regionHeading="접안지역"
+            emptyMessage="선택한 접안 위치가 없습니다. 설정에서 국내 해상 위치를 체크하세요."
+            rows={inboundRows}
+          />
+        </div>
+        <div className="analysis-mobile-list assessment-mobile-list" aria-label="모바일 해상 접근 가능성 판단표">
+          <MarineAssessmentMobileGroup
+            title="출항 가능여부"
+            emptyMessage="선택한 출항 위치가 없습니다. 설정에서 중국 황해·동중국해 위치를 체크하세요."
+            rows={outboundRows}
+          />
+          <MarineAssessmentMobileGroup
+            title="접안 가능여부"
             emptyMessage="선택한 접안 위치가 없습니다. 설정에서 국내 해상 위치를 체크하세요."
             rows={inboundRows}
           />

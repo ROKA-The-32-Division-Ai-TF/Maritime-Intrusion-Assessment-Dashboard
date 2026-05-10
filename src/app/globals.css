@@ -2833,6 +2833,199 @@ button {
   font-weight: 950;
 }
 
+.analysis-mobile-list {
+  display: none;
+  min-width: 0;
+}
+
+.analysis-mobile-card,
+.assessment-mobile-card {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid rgba(37, 74, 165, 0.12);
+  border-radius: 14px;
+  background: white;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.analysis-mobile-card.current {
+  border-color: rgba(245, 158, 11, 0.42);
+  background: #fffbeb;
+}
+
+.analysis-mobile-card > header,
+.assessment-mobile-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid rgba(37, 74, 165, 0.1);
+  padding: 12px;
+}
+
+.analysis-mobile-card header div,
+.assessment-mobile-card header div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.analysis-mobile-card header strong,
+.assessment-mobile-card header strong {
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 1000;
+  line-height: 1.2;
+}
+
+.analysis-mobile-card header span,
+.assessment-mobile-card header span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.mobile-astro-grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 12px 0;
+}
+
+.mobile-astro-grid div,
+.assessment-mobile-card dl div,
+.mobile-tide-card {
+  border: 1px solid rgba(37, 74, 165, 0.1);
+  border-radius: 11px;
+  background: #f8fbff;
+}
+
+.mobile-astro-grid div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+}
+
+.mobile-astro-grid span,
+.assessment-mobile-card dt,
+.mobile-tide-card dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.mobile-astro-grid strong,
+.assessment-mobile-card dd,
+.mobile-tide-card dd {
+  margin: 0;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 1000;
+  line-height: 1.25;
+}
+
+.mobile-tide-list {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 12px 12px;
+  scrollbar-width: thin;
+}
+
+.mobile-tide-card {
+  min-width: 178px;
+  padding: 10px;
+}
+
+.mobile-tide-card > div {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.mobile-tide-card strong {
+  color: var(--division-blue);
+  font-size: 13px;
+  font-weight: 1000;
+}
+
+.mobile-tide-card span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.mobile-tide-card dl,
+.assessment-mobile-card dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.mobile-tide-card dl {
+  grid-template-columns: 1fr;
+}
+
+.mobile-tide-card dl div {
+  display: grid;
+  gap: 3px;
+}
+
+.assessment-mobile-list {
+  gap: 12px;
+}
+
+.assessment-mobile-group {
+  display: grid;
+  gap: 9px;
+}
+
+.assessment-mobile-group h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 1000;
+}
+
+.assessment-mobile-group > p {
+  margin: 0;
+  border: 1px dashed rgba(37, 74, 165, 0.22);
+  border-radius: 12px;
+  background: #f8fbff;
+  color: var(--muted);
+  padding: 16px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.assessment-mobile-card.clear {
+  border-left: 5px solid #22c55e;
+}
+
+.assessment-mobile-card.caution {
+  border-left: 5px solid #f59e0b;
+}
+
+.assessment-mobile-card.restrict {
+  border-left: 5px solid #ef4444;
+}
+
+.assessment-mobile-card dl {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 10px 12px 12px;
+}
+
+.assessment-mobile-card dl div {
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+}
+
 .assessment-badge {
   min-width: 64px;
   display: inline-flex;
@@ -4194,6 +4387,25 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .marine-analysis-view {
+    padding-bottom: 12px;
+  }
+
+  .analysis-table-wrap,
+  .assessment-stack {
+    display: none;
+  }
+
+  .analysis-mobile-list {
+    display: grid;
+    gap: 10px;
+    padding: 0 10px 14px;
+  }
+
+  .monthly-mobile-list {
+    max-height: none;
+  }
+
   .analysis-table-wrap,
   .assessment-stack {
     width: calc(100% - 20px);
@@ -4552,6 +4764,7 @@ button {
   .analysis-table-wrap,
   .assessment-stack,
   .assessment-matrix-card {
+    display: block;
     width: 100%;
     max-height: none;
     margin: 0;
@@ -4562,6 +4775,10 @@ button {
   .assessment-stack {
     gap: 10px;
     padding: 0;
+  }
+
+  .analysis-mobile-list {
+    display: none !important;
   }
 
   .analysis-grid-table,
