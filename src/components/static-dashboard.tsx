@@ -5264,13 +5264,9 @@ function SettingsPanel({
   );
 }
 
-const marineMonthlyAnalysisLocations = ["서천", "보령", "태안", "서산", "당진"] as const;
-const marineOutboundAssessmentLocations = ["중국 - 대련", "중국 - 위해"] as const;
-const marineInboundAssessmentLocations = ["당진", "태안", "보령", "서천"] as const;
-
 type MarineAnalysisSource = {
   label: string;
-  region?: ResolvedRegion;
+  region: ResolvedRegion;
   row: MarineRow;
   weather: WeatherNow;
 };
@@ -5302,67 +5298,25 @@ type MarineAssessmentTableRow = {
   evaluationLevel: "clear" | "caution" | "restrict";
 };
 
-function findMarineAnalysisRegion(label: string, regions: ResolvedRegion[]) {
-  const normalizedLabel = label.replace(/\s|-/g, "");
-  const needles = normalizedLabel.includes("대련")
-    ? ["대련"]
-    : normalizedLabel.includes("위해")
-      ? ["위해"]
-      : normalizedLabel.includes("서천")
-        ? ["서천", "춘장대"]
-        : normalizedLabel.includes("보령")
-          ? ["보령", "대천", "무창포"]
-          : normalizedLabel.includes("태안")
-            ? ["태안", "만리포", "꽃지", "몽산포", "학암포"]
-            : normalizedLabel.includes("서산")
-              ? ["서산", "대산", "삼길포"]
-              : normalizedLabel.includes("당진")
-                ? ["당진", "장고항", "왜목"]
-                : [label];
-
-  return regions.find((region) => {
-    const haystack = [
-      region.name,
-      region.harborName,
-      region.kmaHint,
-      region.nifsHint,
-      ...region.harbors.map((harbor) => harbor.harborName),
-    ].join(" ");
-
-    return needles.some((needle) => haystack.includes(needle));
-  });
+function marineAnalysisRegionLabel(region: ResolvedRegion) {
+  const station = region.harborName && region.harborName !== region.name ? region.harborName : seaAreaLabels[region.seaArea];
+  return `${region.name} · ${station}`;
 }
 
-function fallbackAnalysisWeather(row: MarineRow): WeatherNow {
-  const weather = weatherFromOverview(row.overview, "partly");
-
-  return {
-    ...weather,
-    temperature: "15.0℃",
-    windSpeed: row.windSpeed,
-    windDirection: row.windDirection,
-    precipitation: "-",
-    sunrise: "06:02",
-    sunset: "19:24",
-    moonrise: "23:18",
-    moonset: "08:42",
-    updatedAt: "기준값",
-    state: "fallback",
-  };
-}
-
-function resolveMarineAnalysisSource(
-  label: string,
-  regions: ResolvedRegion[],
+function resolveMarineAnalysisSourceFromRegion(
+  region: ResolvedRegion,
   rows: Record<RegionKey, MarineRow>,
   weatherByRegion: Record<RegionKey, WeatherNow>,
 ): MarineAnalysisSource {
-  const region = findMarineAnalysisRegion(label, regions);
-  const fallbackArea: SeaAreaType = label.includes("중국") ? "nearshore" : "coast";
-  const row = region ? rows[region.key] || region.fixed : defaultMarineRow(fallbackArea);
-  const weather = region ? weatherByRegion[region.key] || fallbackWeather(region) : fallbackAnalysisWeather(row);
+  const row = rows[region.key] || region.fixed;
+  const weather = weatherByRegion[region.key] || fallbackWeather(region);
 
-  return { label, region, row, weather };
+  return {
+    label: marineAnalysisRegionLabel(region),
+    region,
+    row,
+    weather,
+  };
 }
 
 function formatKstMonthTitle(date = new Date()) {
@@ -5405,27 +5359,26 @@ function buildMonthlyAnalysisRows(
   rows: Record<RegionKey, MarineRow>,
   weatherByRegion: Record<RegionKey, WeatherNow>,
 ) {
+  const sources = regions.map((region) => resolveMarineAnalysisSourceFromRegion(region, rows, weatherByRegion));
+
+  if (!sources.length) {
+    return [];
+  }
+
   const parts = kstParts();
   const year = Number(parts.year);
   const month = Number(parts.month);
   const today = Number(parts.day);
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const primarySource = resolveMarineAnalysisSource("서산", regions, rows, weatherByRegion);
-  const locationSources = Object.fromEntries(
-    marineMonthlyAnalysisLocations.map((label) => [
-      label,
-      resolveMarineAnalysisSource(label, regions, rows, weatherByRegion),
-    ]),
-  ) as Record<(typeof marineMonthlyAnalysisLocations)[number], MarineAnalysisSource>;
+  const primarySource = sources[0];
 
   return Array.from({ length: daysInMonth }, (_, index): MarineMonthlyDayRow => {
     const day = index + 1;
-    const tideReference = locationSources.태안?.row || primarySource.row;
+    const tideReference = primarySource.row;
     const tides = Object.fromEntries(
-      marineMonthlyAnalysisLocations.map((label) => {
-        const source = locationSources[label];
+      sources.map((source) => {
         return [
-          label,
+          source.region.key,
           {
             high: shiftedTideValue(source.row.highTide, source.row.highTide2, index),
             low: shiftedTideValue(source.row.lowTide, source.row.lowTide2, index),
@@ -5518,28 +5471,48 @@ function buildMarineAssessmentRow(source: MarineAnalysisSource): MarineAssessmen
   };
 }
 
-function AnalysisDocumentHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+function AnalysisDocumentHeader({
+  title,
+  subtitle,
+  regions,
+  onOpenSettings,
+}: {
+  title: string;
+  subtitle?: string;
+  regions: ResolvedRegion[];
+  onOpenSettings: () => void;
+}) {
   return (
     <header className="analysis-doc-header">
-      <div className="analysis-doc-band">
-        <span>{INTEGRATED_SYSTEM_NAME}</span>
-        <Image
-          src={DIVISION_MARK_SRC}
-          alt="제32보병사단"
-          width={54}
-          height={54}
-          priority
-        />
-      </div>
       <div className="analysis-doc-title-row">
         <div>
           <h2>{title}</h2>
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
-        <button type="button" className="analysis-action-button" onClick={() => window.print()}>
-          <Printer size={18} aria-hidden="true" />
-          인쇄
-        </button>
+        <div className="analysis-action-group">
+          <button type="button" className="analysis-secondary-button" onClick={onOpenSettings}>
+            <Settings size={18} aria-hidden="true" />
+            위치 선택
+          </button>
+          <button type="button" className="analysis-action-button" onClick={() => window.print()}>
+            <Printer size={18} aria-hidden="true" />
+            인쇄
+          </button>
+        </div>
+      </div>
+      <div className="analysis-selection-strip" aria-label="표 반영 위치">
+        <div>
+          <span>표 반영 위치</span>
+          <strong>{regions.length}개 선택</strong>
+        </div>
+        <div className="analysis-chip-row">
+          {regions.slice(0, 12).map((region) => (
+            <span key={region.key} className="analysis-location-chip">
+              {marineAnalysisRegionLabel(region)}
+            </span>
+          ))}
+          {regions.length > 12 ? <span className="analysis-location-chip muted">+{regions.length - 12}</span> : null}
+        </div>
       </div>
     </header>
   );
@@ -5550,20 +5523,29 @@ function MarineMonthlyAnalysisView({
   weatherByRegion,
   tableRows,
   tableReferenceTime,
+  onOpenSettings,
 }: {
   regions: ResolvedRegion[];
   weatherByRegion: Record<RegionKey, WeatherNow>;
   tableRows: Record<RegionKey, MarineRow>;
   tableReferenceTime: string;
+  onOpenSettings: () => void;
 }) {
+  const analysisSources = regions.map((region) => resolveMarineAnalysisSourceFromRegion(region, tableRows, weatherByRegion));
   const monthRows = buildMonthlyAnalysisRows(regions, tableRows, weatherByRegion);
+  const tableMinWidth = Math.max(820, 610 + analysisSources.length * 170);
 
   return (
     <section className="marine-analysis-view" aria-label="월간 기상분석표">
       <article className="analysis-document monthly-document">
-        <AnalysisDocumentHeader title={formatKstMonthTitle()} subtitle={`${tableReferenceTime} · 해상 월간 분석`} />
+        <AnalysisDocumentHeader
+          title={formatKstMonthTitle()}
+          subtitle={`${tableReferenceTime} · 선택 위치 기준`}
+          regions={regions}
+          onOpenSettings={onOpenSettings}
+        />
         <div className="analysis-table-wrap monthly-table-wrap">
-          <table className="analysis-grid-table monthly-analysis-table">
+          <table className="analysis-grid-table monthly-analysis-table" style={{ minWidth: tableMinWidth }}>
             <thead>
               <tr>
                 <th rowSpan={2}>일자</th>
@@ -5573,14 +5555,17 @@ function MarineMonthlyAnalysisView({
                 <th rowSpan={2}>월출<br />/ 월몰</th>
                 <th rowSpan={2}>월광</th>
                 <th rowSpan={2}>물때</th>
-                {marineMonthlyAnalysisLocations.map((location) => (
-                  <th key={location} colSpan={2}>{location}</th>
+                {analysisSources.map((source) => (
+                  <th key={source.region.key} colSpan={2}>
+                    <span>{source.region.name}</span>
+                    <small>{source.region.harborName}</small>
+                  </th>
                 ))}
               </tr>
               <tr>
-                {marineMonthlyAnalysisLocations.flatMap((location) => [
-                  <th key={`${location}-high`}>만조</th>,
-                  <th key={`${location}-low`}>간조</th>,
+                {analysisSources.flatMap((source) => [
+                  <th key={`${source.region.key}-high`}>만조</th>,
+                  <th key={`${source.region.key}-low`}>간조</th>,
                 ])}
               </tr>
             </thead>
@@ -5594,9 +5579,9 @@ function MarineMonthlyAnalysisView({
                   <td>{row.moonriseMoonset}</td>
                   <td>{row.moonlight}</td>
                   <td>{row.tideAge}</td>
-                  {marineMonthlyAnalysisLocations.flatMap((location) => [
-                    <td key={`${row.dateLabel}-${location}-high`}>{row.tides[location].high}</td>,
-                    <td key={`${row.dateLabel}-${location}-low`}>{row.tides[location].low}</td>,
+                  {analysisSources.flatMap((source) => [
+                    <td key={`${row.dateLabel}-${source.region.key}-high`}>{row.tides[source.region.key].high}</td>,
+                    <td key={`${row.dateLabel}-${source.region.key}-low`}>{row.tides[source.region.key].low}</td>,
                   ])}
                 </tr>
               ))}
@@ -5611,10 +5596,12 @@ function MarineMonthlyAnalysisView({
 function MarineAssessmentMatrix({
   title,
   regionHeading,
+  emptyMessage,
   rows,
 }: {
   title: string;
   regionHeading: string;
+  emptyMessage: string;
   rows: MarineAssessmentTableRow[];
 }) {
   return (
@@ -5669,6 +5656,11 @@ function MarineAssessmentMatrix({
               </td>
             </tr>
           ))}
+          {rows.length === 0 ? (
+            <tr className="assessment-empty-row">
+              <td colSpan={11}>{emptyMessage}</td>
+            </tr>
+          ) : null}
         </tbody>
       </table>
     </section>
@@ -5680,32 +5672,42 @@ function MarineAccessAssessmentView({
   weatherByRegion,
   tableRows,
   tableReferenceTime,
+  onOpenSettings,
 }: {
   regions: ResolvedRegion[];
   weatherByRegion: Record<RegionKey, WeatherNow>;
   tableRows: Record<RegionKey, MarineRow>;
   tableReferenceTime: string;
+  onOpenSettings: () => void;
 }) {
-  const outboundRows = marineOutboundAssessmentLocations.map((label) =>
-    buildMarineAssessmentRow(resolveMarineAnalysisSource(label, regions, tableRows, weatherByRegion)),
-  );
-  const inboundRows = marineInboundAssessmentLocations.map((label) =>
-    buildMarineAssessmentRow(resolveMarineAnalysisSource(label, regions, tableRows, weatherByRegion)),
-  );
+  const analysisSources = regions.map((region) => resolveMarineAnalysisSourceFromRegion(region, tableRows, weatherByRegion));
+  const outboundRows = analysisSources
+    .filter((source) => isChinaMarineRegion(source.region))
+    .map((source) => buildMarineAssessmentRow(source));
+  const inboundRows = analysisSources
+    .filter((source) => !isChinaMarineRegion(source.region))
+    .map((source) => buildMarineAssessmentRow(source));
 
   return (
     <section className="marine-analysis-view" aria-label="해상 접근 가능성 판단표">
       <article className="analysis-document assessment-document">
-        <AnalysisDocumentHeader title={formatKstAssessmentTitle()} subtitle={`${tableReferenceTime} · 출항·접안 평가지표`} />
+        <AnalysisDocumentHeader
+          title={formatKstAssessmentTitle()}
+          subtitle={`${tableReferenceTime} · 선택 위치 기준`}
+          regions={regions}
+          onOpenSettings={onOpenSettings}
+        />
         <div className="assessment-stack">
           <MarineAssessmentMatrix
             title="출항 가능여부 평가 지표"
             regionHeading="출항지역"
+            emptyMessage="선택한 출항 위치가 없습니다. 설정에서 중국 황해·동중국해 위치를 체크하세요."
             rows={outboundRows}
           />
           <MarineAssessmentMatrix
             title="접안 가능여부 평가 지표"
             regionHeading="접안지역"
+            emptyMessage="선택한 접안 위치가 없습니다. 설정에서 국내 해상 위치를 체크하세요."
             rows={inboundRows}
           />
         </div>
@@ -6807,7 +6809,9 @@ function DashboardWorkspace({
   }, [displayRegions]);
 
   useEffect(() => {
-    if (operationMode !== "coastal" || activeView !== "marine") {
+    const isMarineDataView = ["marine", "marineMonthly", "marineAccess"].includes(activeView);
+
+    if (operationMode !== "coastal" || !isMarineDataView) {
       return undefined;
     }
 
@@ -7187,17 +7191,19 @@ function DashboardWorkspace({
             />
           ) : activeView === "marineMonthly" ? (
             <MarineMonthlyAnalysisView
-              regions={settingsRegions}
+              regions={displayRegions}
               weatherByRegion={weatherByRegion}
               tableRows={tableRows}
               tableReferenceTime={tableReferenceTime}
+              onOpenSettings={() => setActiveView("settings")}
             />
           ) : activeView === "marineAccess" ? (
             <MarineAccessAssessmentView
-              regions={settingsRegions}
+              regions={displayRegions}
               weatherByRegion={weatherByRegion}
               tableRows={tableRows}
               tableReferenceTime={tableReferenceTime}
+              onOpenSettings={() => setActiveView("settings")}
             />
           ) : (
             <BladeDashboardView

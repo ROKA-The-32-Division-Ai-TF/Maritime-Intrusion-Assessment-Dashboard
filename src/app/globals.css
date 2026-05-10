@@ -2579,98 +2579,138 @@ button {
 .analysis-document {
   min-height: 100%;
   border: 1px solid rgba(37, 74, 165, 0.16);
-  border-radius: 18px;
+  border-radius: 14px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.96)),
     white;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.11);
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.09);
   overflow: hidden;
 }
 
 .analysis-doc-header {
   display: grid;
-  gap: 18px;
+  gap: 12px;
+  border-bottom: 1px solid rgba(37, 74, 165, 0.12);
   background: #ffffff;
-}
-
-.analysis-doc-band {
-  min-height: 82px;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  padding: 10px 22px;
-  background: var(--division-blue);
-  color: white;
-}
-
-.analysis-doc-band span {
-  grid-column: 2;
-  font-size: clamp(24px, 2.4vw, 40px);
-  font-weight: 1000;
-  letter-spacing: 0;
-  text-align: center;
-}
-
-.analysis-doc-band img {
-  grid-column: 3;
-  justify-self: end;
-  width: 54px;
-  height: 54px;
-  object-fit: contain;
+  padding: 18px 20px 14px;
 }
 
 .analysis-doc-title-row {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 18px;
-  padding: 0 24px 10px;
-  position: relative;
 }
 
 .analysis-doc-title-row h2 {
   margin: 0;
   color: #050816;
-  font-size: clamp(30px, 3.1vw, 48px);
+  font-size: clamp(22px, 2vw, 34px);
   font-weight: 1000;
-  line-height: 1.05;
+  line-height: 1.12;
   letter-spacing: 0;
-  text-align: center;
+  text-align: left;
 }
 
 .analysis-doc-title-row p {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 850;
-  text-align: center;
+  text-align: left;
 }
 
-.analysis-action-button {
-  position: absolute;
-  right: 24px;
-  top: 4px;
+.analysis-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.analysis-action-button,
+.analysis-secondary-button {
   min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 14px;
-  background: #ffc139;
-  color: white;
-  padding: 0 22px;
-  font-size: 18px;
+  padding: 0 16px;
+  font-size: 14px;
   font-weight: 1000;
   cursor: pointer;
+}
+
+.analysis-action-button {
+  background: #ffc139;
+  color: white;
   box-shadow: 0 12px 24px rgba(245, 158, 11, 0.25);
 }
 
+.analysis-secondary-button {
+  border-color: rgba(37, 74, 165, 0.18);
+  background: #eef5ff;
+  color: var(--division-blue);
+}
+
+.analysis-selection-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(37, 74, 165, 0.12);
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 10px 12px;
+}
+
+.analysis-selection-strip > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.analysis-selection-strip span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.analysis-selection-strip strong {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 1000;
+}
+
+.analysis-chip-row {
+  min-width: 0;
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.analysis-location-chip {
+  flex: 0 0 auto;
+  border: 1px solid rgba(37, 74, 165, 0.16);
+  border-radius: 999px;
+  background: white;
+  color: var(--division-blue) !important;
+  padding: 6px 10px;
+  font-size: 12px !important;
+  font-weight: 1000 !important;
+}
+
+.analysis-location-chip.muted {
+  color: var(--muted) !important;
+}
+
 .analysis-table-wrap {
-  width: calc(100% - 32px);
-  margin: 0 auto 22px;
+  width: calc(100% - 28px);
+  margin: 14px auto 18px;
   overflow: auto;
-  border: 2px solid #0b1220;
+  border: 1px solid #0b1220;
   border-radius: 12px;
   background: white;
   scrollbar-width: thin;
@@ -2685,8 +2725,8 @@ button {
 
 .analysis-grid-table th,
 .analysis-grid-table td {
-  border-right: 2px solid #0b1220;
-  border-bottom: 2px solid #0b1220;
+  border-right: 1px solid #0b1220;
+  border-bottom: 1px solid #0b1220;
   height: 58px;
   padding: 8px 10px;
   text-align: center;
@@ -2709,13 +2749,21 @@ button {
 }
 
 .analysis-grid-table thead th {
-  background: #bfdbff;
+  background: #d7e9ff;
   color: #061126;
   font-weight: 1000;
 }
 
+.analysis-grid-table thead th small {
+  display: block;
+  margin-top: 3px;
+  color: #31517c;
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .analysis-grid-table tbody th {
-  background: #d7eaff;
+  background: #eef6ff;
   color: #061126;
 }
 
@@ -2724,7 +2772,7 @@ button {
 }
 
 .monthly-analysis-table {
-  min-width: 1540px;
+  min-width: 980px;
 }
 
 .monthly-analysis-table td {
@@ -2743,14 +2791,14 @@ button {
 
 .assessment-stack {
   display: grid;
-  gap: 18px;
-  padding: 0 20px 24px;
+  gap: 14px;
+  padding: 14px 18px 20px;
   overflow: auto;
 }
 
 .assessment-matrix-card {
   overflow: auto;
-  border: 2px solid #0b1220;
+  border: 1px solid #0b1220;
   border-radius: 12px;
   background: white;
 }
@@ -2776,6 +2824,13 @@ button {
   height: 54px;
   padding: 7px 8px;
   font-size: clamp(11px, 0.68vw, 14px);
+}
+
+.assessment-empty-row td {
+  height: 88px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 950;
 }
 
 .assessment-badge {
@@ -4113,36 +4168,30 @@ button {
     border-radius: 14px;
   }
 
-  .analysis-doc-band {
-    min-height: 64px;
-    padding: 8px 12px;
-  }
-
-  .analysis-doc-band span {
-    font-size: 22px;
-  }
-
-  .analysis-doc-band img {
-    width: 42px;
-    height: 42px;
-  }
-
   .analysis-doc-title-row {
     display: grid;
     gap: 10px;
-    justify-items: center;
-    padding: 0 12px 12px;
+    justify-items: start;
   }
 
   .analysis-doc-title-row h2 {
-    font-size: 26px;
+    font-size: 24px;
   }
 
-  .analysis-action-button {
-    position: static;
+  .analysis-action-group {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .analysis-action-button,
+  .analysis-secondary-button {
     min-height: 40px;
-    padding: 0 18px;
+    padding: 0 14px;
     font-size: 15px;
+  }
+
+  .analysis-selection-strip {
+    grid-template-columns: 1fr;
   }
 
   .analysis-table-wrap,
@@ -4486,12 +4535,6 @@ button {
     min-height: auto;
   }
 
-  .analysis-doc-band {
-    min-height: 56px;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
   .analysis-doc-title-row {
     padding: 8px 0 14px;
   }
@@ -4501,7 +4544,8 @@ button {
   }
 
   .analysis-doc-title-row p,
-  .analysis-action-button {
+  .analysis-action-group,
+  .analysis-selection-strip {
     display: none;
   }
 
