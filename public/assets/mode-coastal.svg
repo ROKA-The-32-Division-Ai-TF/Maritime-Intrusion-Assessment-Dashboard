@@ -1,0 +1,31 @@
+<svg width="640" height="420" viewBox="0 0 640 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="640" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#061C3A"/>
+      <stop offset="0.58" stop-color="#0D4C80"/>
+      <stop offset="1" stop-color="#1BA6A6"/>
+    </linearGradient>
+    <linearGradient id="coast" x1="400" y1="40" x2="600" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#CDE9D7"/>
+      <stop offset="1" stop-color="#739E86"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.12 0 0 0 0 0.78 0 0 0 0 0.88 0 0 0 0.8 0"/>
+      <feBlend in="SourceGraphic"/>
+    </filter>
+  </defs>
+  <rect width="640" height="420" fill="url(#sea)"/>
+  <path d="M420 0C500 50 510 100 474 157C442 209 471 260 548 318C587 347 609 382 619 420H640V0H420Z" fill="url(#coast)" opacity="0.9"/>
+  <path d="M-40 320C100 245 214 249 320 309C430 371 520 357 690 270" stroke="#6EE7E0" stroke-width="18" stroke-linecap="round" opacity="0.26"/>
+  <path d="M-20 268C110 202 228 205 336 263C446 322 535 304 650 238" stroke="#D8FFF8" stroke-width="4" stroke-linecap="round" opacity="0.55"/>
+  <path d="M20 154C120 117 218 128 310 185C416 250 500 236 615 166" stroke="#A7F3D0" stroke-width="3" stroke-dasharray="12 14" opacity="0.5"/>
+  <circle cx="284" cy="210" r="96" stroke="#BDF9FF" stroke-width="2" opacity="0.48"/>
+  <circle cx="284" cy="210" r="50" stroke="#BDF9FF" stroke-width="2" opacity="0.7"/>
+  <path d="M284 122V298M196 210H372" stroke="#BDF9FF" stroke-width="2" opacity="0.42"/>
+  <circle cx="284" cy="210" r="9" fill="#E9FEFF" filter="url(#glow)"/>
+  <circle cx="392" cy="152" r="5" fill="#FDE68A"/>
+  <circle cx="448" cy="254" r="5" fill="#FDE68A"/>
+  <path d="M74 68H254" stroke="white" stroke-opacity="0.16" stroke-width="2"/>
+  <path d="M74 90H204" stroke="white" stroke-opacity="0.16" stroke-width="2"/>
+</svg>

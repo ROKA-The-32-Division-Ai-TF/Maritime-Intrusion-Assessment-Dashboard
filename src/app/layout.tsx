@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "제32보병사단 밀입국 가능성 판단 지원 체계",
-  description: "정적 운용 가능한 밀입국 가능성 판단 지원 대시보드",
+  title: "백룡 기상판단 지원체계",
+  description: "해상·육상·항공기상을 분리 운용하는 설명가능 AI 기상판단 대시보드",
 };
 
 export default function RootLayout({
