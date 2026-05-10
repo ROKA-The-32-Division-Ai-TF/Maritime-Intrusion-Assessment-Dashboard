@@ -226,7 +226,7 @@ button {
   position: relative;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto auto auto auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   align-content: end;
   justify-items: center;
   gap: 9px;
@@ -3603,6 +3603,33 @@ button {
     overflow: visible;
   }
 
+  .dashboard-screen.view-blade .screen-stage,
+  .dashboard-screen.view-blade .blade-view,
+  .dashboard-screen.view-air .screen-stage,
+  .dashboard-screen.view-air .aviation-view,
+  .dashboard-screen.view-land .screen-stage,
+  .dashboard-screen.view-land .land-view,
+  .dashboard-screen.view-marine .screen-stage,
+  .dashboard-screen.view-marine .marine-view {
+    height: auto;
+    overflow: visible;
+  }
+
+  .dashboard-screen.view-blade .dashboard-shell,
+  .dashboard-screen.view-air .dashboard-shell,
+  .dashboard-screen.view-land .dashboard-shell,
+  .dashboard-screen.view-marine .dashboard-shell {
+    height: auto;
+  }
+
+  .dashboard-screen.view-blade .blade-workspace,
+  .dashboard-screen.view-air .aviation-workspace,
+  .dashboard-screen.view-land .land-workspace,
+  .dashboard-screen.view-marine .marine-view {
+    height: auto;
+    min-height: 0;
+  }
+
   .marine-view,
   .blade-view,
   .land-view,
@@ -3874,7 +3901,20 @@ button {
   }
 
   .blade-map-card {
-    min-height: auto;
+    height: min(58dvh, 430px);
+    min-height: 320px;
+  }
+
+  .land-map-card {
+    height: min(58dvh, 430px);
+    min-height: 320px;
+  }
+
+  .dashboard-screen.view-blade .blade-map-card,
+  .dashboard-screen.view-air .aviation-map-card,
+  .dashboard-screen.view-land .land-map-card {
+    height: min(58dvh, 430px);
+    min-height: 320px;
   }
 
   .dashboard-screen.view-blade .dashboard-header,
@@ -3903,19 +3943,47 @@ button {
   }
 
   .blade-map-canvas {
-    min-height: 390px;
+    min-height: 0;
+    height: 100%;
   }
 
   .land-map-canvas {
-    min-height: 390px;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .dashboard-screen.view-blade .blade-map-canvas,
+  .dashboard-screen.view-air .blade-map-canvas,
+  .dashboard-screen.view-land .land-map-canvas {
+    height: 100%;
+    min-height: 0;
   }
 
   .windy-zone-tray {
+    max-height: 194px;
     grid-auto-flow: row;
     grid-auto-columns: auto;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     overflow-x: hidden;
-    overflow-y: visible;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .blade-zone-panel,
+  .land-zone-panel {
+    max-height: 220px;
+  }
+
+  .land-zone-list {
+    max-height: 194px;
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    grid-template-columns: 1fr;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
   }
 
   .map-legend {
@@ -3985,6 +4053,12 @@ button {
     gap: 10px;
     margin-top: 10px;
     margin-bottom: 10px;
+    max-height: 322px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
+    scrollbar-width: thin;
   }
 
   .region-card {

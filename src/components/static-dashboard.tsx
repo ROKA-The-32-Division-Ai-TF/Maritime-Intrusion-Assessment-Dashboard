@@ -107,22 +107,16 @@ const MODE_LAND_SRC = `${BASE_PATH}/assets/mode-land.svg`;
 const MODE_AIR_SRC = `${BASE_PATH}/assets/mode-air.svg`;
 const INTEGRATED_SYSTEM_NAME = "백룡 기상판단 지원체계";
 const COASTAL_SYSTEM = {
-  modeLabel: "해상기상",
-  shortName: "해상판단",
-  fullName: "해상 기상상황 판단",
-  koreanName: "백룡 해상기상 판단체계",
+  label: "해상",
+  koreanName: INTEGRATED_SYSTEM_NAME,
 };
 const LAND_SYSTEM = {
-  modeLabel: "육상기상",
-  shortName: "육상판단",
-  fullName: "육상 활동환경 판단",
-  koreanName: "백룡 육상기상 판단체계",
+  label: "육상",
+  koreanName: INTEGRATED_SYSTEM_NAME,
 };
 const AIR_SYSTEM = {
-  modeLabel: "항공기상",
-  shortName: "항공판단",
-  fullName: "항공작전 기상 판단",
-  koreanName: "백룡 항공기상 판단체계",
+  label: "항공",
+  koreanName: INTEGRATED_SYSTEM_NAME,
 };
 const presetAviationZoneIds = new Set(["A-A", "A-B", "A-C", "A-D"]);
 
@@ -1890,12 +1884,6 @@ function kmaMarineMapUrl() {
   return KMA_MARINE_MAP_URL;
 }
 
-function systemForMode(mode: OperationMode) {
-  if (mode === "land") return LAND_SYSTEM;
-  if (mode === "air") return AIR_SYSTEM;
-  return COASTAL_SYSTEM;
-}
-
 const windyOverlayLabels: Record<WindyOverlay, string> = {
   waves: "파고",
   wind: "바람",
@@ -2725,7 +2713,6 @@ function LoginScreen({ onEnter }: { onEnter: () => void }) {
         />
 
         <h1>
-          <span>해상기상 · 육상기상 · 항공기상</span>
           <strong>{INTEGRATED_SYSTEM_NAME}</strong>
         </h1>
 
@@ -5107,7 +5094,7 @@ function SettingsPanel({
             <div className="land-settings-title-row">
               <div>
                 <h3>공중 측정지역 표시 설정</h3>
-                <p>전국 항공 관측권역을 지역별로 묶고, 체크한 측정지역만 항공기상 화면에 표시합니다.</p>
+                <p>전국 항공 관측권역을 지역별로 묶고, 체크한 측정지역만 항공 화면에 표시합니다.</p>
               </div>
               <strong>{selectedAviationCount} / {aviationZoneList.length}</strong>
             </div>
@@ -5208,7 +5195,7 @@ function SettingsPanel({
               <dd>초단기·단기예보, 기온, 바람, 강수량, 하늘상태, 강수확률, 파고, 기상특보</dd>
             </div>
             <div>
-              <dt>기상청 API허브 · 항공기상</dt>
+              <dt>기상청 API허브 · 항공</dt>
               <dd>METAR/항공관측 기반 풍향, 풍속, 돌풍, 시정, 활주로시정, 현재일기, 운량, 운고, 기온, 이슬점, 습도, 기압</dd>
             </div>
             <div>
@@ -5432,7 +5419,7 @@ function LandSituationMap({
       <div className="land-map-canvas official-map">
         <iframe
           key={`${activeItem.zone.id}-${lat}-${lon}-${windyOverlay}`}
-          title="윈디 육상기상 지도"
+          title="윈디 육상 지도"
           src={mapUrl}
           loading="lazy"
           referrerPolicy="no-referrer"
@@ -5521,7 +5508,7 @@ function LandDashboardView({
   const levelColor = riskLevelColor(activeItem.assessment.level);
 
   return (
-    <section className="land-view" aria-label="육상기상 화면">
+    <section className="land-view" aria-label="육상 화면">
       <section className="land-workspace">
         <div className="land-map-column">
           <LandGroupTabs groups={landDisplayGroups} activeGroup={activeGroup} onSelect={setActiveGroup} />
@@ -5641,7 +5628,7 @@ function LandTableView({
           <LandGroupTabs groups={landDisplayGroups} activeGroup={activeGroup} onSelect={setActiveGroup} />
         </div>
         <OperationalHourlyStrip
-          title="시간별 육상기상"
+          title="시간별 육상"
           subtitle={activeItem.zone.name}
           rows={landHourlyRows(activeItem.zone)}
         />
@@ -5712,7 +5699,7 @@ function AviationRuleCards({ assessment }: { assessment: AviationRiskAssessment 
           </article>
         ))
       ) : (
-        <p className="rule-empty">현재 적용된 고위험 항공기상 규칙은 없습니다.</p>
+        <p className="rule-empty">현재 적용된 고위험 항공 규칙은 없습니다.</p>
       )}
     </div>
   );
@@ -5776,7 +5763,7 @@ function AviationMap({
         <iframe
           key={`aviation-windy-${activeItem.zone.id}-${activeItem.zone.center.join(",")}-${windyOverlay}`}
           className="windy-blade-map"
-          title="윈디 항공기상 지도"
+          title="윈디 항공 지도"
           src={mapUrl}
           loading="lazy"
           referrerPolicy="no-referrer"
@@ -5819,7 +5806,7 @@ function AviationDashboardView({
   const levelColor = riskLevelColor(activeItem.assessment.level);
 
   return (
-    <section className="land-view aviation-view" aria-label="항공기상 판단 화면">
+    <section className="land-view aviation-view" aria-label="항공 화면">
       <section className="land-workspace aviation-workspace">
         <div className="blade-map-column aviation-map-column">
           <AviationMap
@@ -5939,7 +5926,7 @@ function AviationTableView({
           <LandGroupTabs groups={aviationDisplayGroups} activeGroup={activeGroup} onSelect={setActiveGroup} />
         </div>
         <OperationalHourlyStrip
-          title="시간별 항공기상"
+          title="시간별 항공"
           subtitle={activeItem.zone.name}
           rows={aviationHourlyRows(activeItem.zone)}
         />
@@ -5980,9 +5967,7 @@ function OperationModeScreen({
             height={420}
             priority
           />
-          <small>해상 작전기상</small>
-          <span>{COASTAL_SYSTEM.modeLabel}</span>
-          <strong>{COASTAL_SYSTEM.shortName}</strong>
+          <strong>{COASTAL_SYSTEM.label}</strong>
           <em>{COASTAL_SYSTEM.koreanName}</em>
         </button>
         <button type="button" className="operation-mode-card land" onClick={() => onSelect("land")}>
@@ -5994,9 +5979,7 @@ function OperationModeScreen({
             height={420}
             priority
           />
-          <small>육상 작전기상</small>
-          <span>{LAND_SYSTEM.modeLabel}</span>
-          <strong>{LAND_SYSTEM.shortName}</strong>
+          <strong>{LAND_SYSTEM.label}</strong>
           <em>{LAND_SYSTEM.koreanName}</em>
         </button>
         <button type="button" className="operation-mode-card air" onClick={() => onSelect("air")}>
@@ -6008,9 +5991,7 @@ function OperationModeScreen({
             height={420}
             priority
           />
-          <small>항공 작전기상</small>
-          <span>{AIR_SYSTEM.modeLabel}</span>
-          <strong>{AIR_SYSTEM.shortName}</strong>
+          <strong>{AIR_SYSTEM.label}</strong>
           <em>{AIR_SYSTEM.koreanName}</em>
         </button>
       </section>
@@ -6388,7 +6369,6 @@ function DashboardWorkspace({
 
     void refreshData();
   }, [activeView, operationMode, refreshData]);
-  const activeSystem = systemForMode(operationMode);
   const handleWindyOverlayChange = useCallback((overlay: WindyOverlay) => {
     setWindyOverlays((current) => ({
       ...current,
@@ -6410,8 +6390,7 @@ function DashboardWorkspace({
         </button>
         <div className="dashboard-title">
           <h1>
-            <span>{activeSystem.shortName}</span>
-            <b>{activeSystem.koreanName}</b>
+            <b>{INTEGRATED_SYSTEM_NAME}</b>
           </h1>
         </div>
         <Image
@@ -6442,8 +6421,8 @@ function DashboardWorkspace({
               aria-pressed={operationMode === "coastal"}
             >
               <Waves size={24} aria-hidden="true" />
-              <span>해상기상</span>
-              <strong>해상판단</strong>
+              <span>해상</span>
+              <strong>상황판</strong>
             </button>
             <button
               type="button"
@@ -6459,8 +6438,8 @@ function DashboardWorkspace({
               aria-pressed={operationMode === "land"}
             >
               <Flame size={24} aria-hidden="true" />
-              <span>육상기상</span>
-              <strong>육상판단</strong>
+              <span>육상</span>
+              <strong>상황판</strong>
             </button>
             <button
               type="button"
@@ -6476,8 +6455,8 @@ function DashboardWorkspace({
               aria-pressed={operationMode === "air"}
             >
               <Plane size={24} aria-hidden="true" />
-              <span>항공기상</span>
-              <strong>항공판단</strong>
+              <span>항공</span>
+              <strong>상황판</strong>
             </button>
           </details>
 
@@ -6496,7 +6475,7 @@ function DashboardWorkspace({
                 >
                   <Radar size={22} aria-hidden="true" />
                   <span>판단지원</span>
-                  <strong>해상판단</strong>
+                  <strong>위험도</strong>
                 </button>
                 <button
                   type="button"
@@ -6553,8 +6532,8 @@ function DashboardWorkspace({
                   aria-pressed={activeView === "air"}
                 >
                   <Plane size={22} aria-hidden="true" />
-                  <span>항공판단</span>
-                  <strong>항공기상</strong>
+                  <span>지도 상황판</span>
+                  <strong>위험도</strong>
                 </button>
                 <button
                   type="button"
@@ -6576,8 +6555,8 @@ function DashboardWorkspace({
           <details className="side-menu-section side-menu-help-section">
             <summary>앱 운용방법</summary>
             <div className="side-menu-help-banner">
-              <strong>{activeSystem.shortName}</strong>
-              <span>{activeSystem.modeLabel} 상황판</span>
+              <strong>{INTEGRATED_SYSTEM_NAME}</strong>
+              <span>지도·카드 기반 상황판</span>
             </div>
             <ol className="side-menu-help-list">
               <li>작전 선택에서 해상·육상·항공 화면을 전환합니다.</li>
@@ -6585,7 +6564,7 @@ function DashboardWorkspace({
               <li>설정에서 표시할 지역만 체크해 상황판을 단순화합니다.</li>
               <li>해상은 시정·파고·풍속·시간대·조석·조류 등을 가중합해 위험도를 계산합니다.</li>
               <li>육상은 인원 부담도, 시야 제한도, 이동 제한도, 환경 위험도 4개 축을 합산합니다.</li>
-              <li>항공은 평균풍·돌풍·시정·운고·낙뢰 등 항공기상 지표를 합산합니다.</li>
+              <li>항공은 평균풍·돌풍·시정·운고·낙뢰 등 항공 지표를 합산합니다.</li>
             </ol>
           </details>
 
