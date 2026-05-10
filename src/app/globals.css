@@ -635,6 +635,7 @@ button {
 
 .screen-stage,
 .marine-view,
+.marine-analysis-view,
 .blade-view,
 .land-view,
 .settings-view {
@@ -664,9 +665,16 @@ button {
 }
 
 .blade-view,
+.marine-analysis-view,
 .land-view,
 .settings-view {
   height: 100%;
+}
+
+.marine-analysis-view {
+  overflow: auto;
+  padding: 0;
+  scrollbar-width: thin;
 }
 
 .blade-view {
@@ -2568,6 +2576,234 @@ button {
   background: rgba(37, 74, 165, 0.08);
 }
 
+.analysis-document {
+  min-height: 100%;
+  border: 1px solid rgba(37, 74, 165, 0.16);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.96)),
+    white;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.11);
+  overflow: hidden;
+}
+
+.analysis-doc-header {
+  display: grid;
+  gap: 18px;
+  background: #ffffff;
+}
+
+.analysis-doc-band {
+  min-height: 82px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 10px 22px;
+  background: var(--division-blue);
+  color: white;
+}
+
+.analysis-doc-band span {
+  grid-column: 2;
+  font-size: clamp(24px, 2.4vw, 40px);
+  font-weight: 1000;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.analysis-doc-band img {
+  grid-column: 3;
+  justify-self: end;
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+}
+
+.analysis-doc-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 0 24px 10px;
+  position: relative;
+}
+
+.analysis-doc-title-row h2 {
+  margin: 0;
+  color: #050816;
+  font-size: clamp(30px, 3.1vw, 48px);
+  font-weight: 1000;
+  line-height: 1.05;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.analysis-doc-title-row p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+  text-align: center;
+}
+
+.analysis-action-button {
+  position: absolute;
+  right: 24px;
+  top: 4px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 14px;
+  background: #ffc139;
+  color: white;
+  padding: 0 22px;
+  font-size: 18px;
+  font-weight: 1000;
+  cursor: pointer;
+  box-shadow: 0 12px 24px rgba(245, 158, 11, 0.25);
+}
+
+.analysis-table-wrap {
+  width: calc(100% - 32px);
+  margin: 0 auto 22px;
+  overflow: auto;
+  border: 2px solid #0b1220;
+  border-radius: 12px;
+  background: white;
+  scrollbar-width: thin;
+}
+
+.analysis-grid-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #050816;
+}
+
+.analysis-grid-table th,
+.analysis-grid-table td {
+  border-right: 2px solid #0b1220;
+  border-bottom: 2px solid #0b1220;
+  height: 58px;
+  padding: 8px 10px;
+  text-align: center;
+  vertical-align: middle;
+  font-size: clamp(12px, 0.78vw, 16px);
+  font-weight: 900;
+  line-height: 1.22;
+  word-break: keep-all;
+  white-space: pre-line;
+}
+
+.analysis-grid-table th:last-child,
+.analysis-grid-table td:last-child {
+  border-right: 0;
+}
+
+.analysis-grid-table tbody tr:last-child th,
+.analysis-grid-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.analysis-grid-table thead th {
+  background: #bfdbff;
+  color: #061126;
+  font-weight: 1000;
+}
+
+.analysis-grid-table tbody th {
+  background: #d7eaff;
+  color: #061126;
+}
+
+.monthly-table-wrap {
+  max-height: calc(100dvh - 250px);
+}
+
+.monthly-analysis-table {
+  min-width: 1540px;
+}
+
+.monthly-analysis-table td {
+  font-size: clamp(11px, 0.72vw, 14px);
+}
+
+.current-analysis-row th,
+.current-analysis-row td {
+  background: #fff7d6 !important;
+}
+
+.assessment-document {
+  display: flex;
+  flex-direction: column;
+}
+
+.assessment-stack {
+  display: grid;
+  gap: 18px;
+  padding: 0 20px 24px;
+  overflow: auto;
+}
+
+.assessment-matrix-card {
+  overflow: auto;
+  border: 2px solid #0b1220;
+  border-radius: 12px;
+  background: white;
+}
+
+.assessment-matrix-card .analysis-grid-table {
+  min-width: 1080px;
+}
+
+.assessment-col-label {
+  width: 10%;
+}
+
+.assessment-col-metric {
+  width: 8.5%;
+}
+
+.assessment-col-evaluation {
+  width: 13.5%;
+}
+
+.assessment-grid-table th,
+.assessment-grid-table td {
+  height: 54px;
+  padding: 7px 8px;
+  font-size: clamp(11px, 0.68vw, 14px);
+}
+
+.assessment-badge {
+  min-width: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 1000;
+}
+
+.assessment-badge.clear {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.assessment-badge.caution {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.assessment-badge.restrict {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .badatime-strip {
   min-height: 50px;
   display: flex;
@@ -3610,7 +3846,11 @@ button {
   .dashboard-screen.view-land .screen-stage,
   .dashboard-screen.view-land .land-view,
   .dashboard-screen.view-marine .screen-stage,
-  .dashboard-screen.view-marine .marine-view {
+  .dashboard-screen.view-marine .marine-view,
+  .dashboard-screen.view-marineMonthly .screen-stage,
+  .dashboard-screen.view-marineMonthly .marine-analysis-view,
+  .dashboard-screen.view-marineAccess .screen-stage,
+  .dashboard-screen.view-marineAccess .marine-analysis-view {
     height: auto;
     overflow: visible;
   }
@@ -3618,7 +3858,9 @@ button {
   .dashboard-screen.view-blade .dashboard-shell,
   .dashboard-screen.view-air .dashboard-shell,
   .dashboard-screen.view-land .dashboard-shell,
-  .dashboard-screen.view-marine .dashboard-shell {
+  .dashboard-screen.view-marine .dashboard-shell,
+  .dashboard-screen.view-marineMonthly .dashboard-shell,
+  .dashboard-screen.view-marineAccess .dashboard-shell {
     height: auto;
   }
 
@@ -3631,6 +3873,7 @@ button {
   }
 
   .marine-view,
+  .marine-analysis-view,
   .blade-view,
   .land-view,
   .official-kma-view,
@@ -3858,11 +4101,58 @@ button {
 
   .marine-view .region-grid,
   .marine-view .workspace,
+  .marine-analysis-view,
   .blade-view .blade-workspace,
   .land-view .land-workspace,
   .official-kma-view,
   .settings-view {
     width: 100%;
+  }
+
+  .analysis-document {
+    border-radius: 14px;
+  }
+
+  .analysis-doc-band {
+    min-height: 64px;
+    padding: 8px 12px;
+  }
+
+  .analysis-doc-band span {
+    font-size: 22px;
+  }
+
+  .analysis-doc-band img {
+    width: 42px;
+    height: 42px;
+  }
+
+  .analysis-doc-title-row {
+    display: grid;
+    gap: 10px;
+    justify-items: center;
+    padding: 0 12px 12px;
+  }
+
+  .analysis-doc-title-row h2 {
+    font-size: 26px;
+  }
+
+  .analysis-action-button {
+    position: static;
+    min-height: 40px;
+    padding: 0 18px;
+    font-size: 15px;
+  }
+
+  .analysis-table-wrap,
+  .assessment-stack {
+    width: calc(100% - 20px);
+    margin-inline: auto;
+  }
+
+  .monthly-table-wrap {
+    max-height: 68svh;
   }
 
   .blade-workspace,
@@ -4172,10 +4462,75 @@ button {
 
   .screen-stage,
   .marine-view,
+  .marine-analysis-view,
   .blade-view,
   .blade-workspace {
     height: auto;
     overflow: visible;
+  }
+
+  .dashboard-screen.view-marineMonthly .dashboard-header,
+  .dashboard-screen.view-marineAccess .dashboard-header {
+    display: none;
+  }
+
+  .dashboard-screen.view-marineMonthly .dashboard-shell,
+  .dashboard-screen.view-marineAccess .dashboard-shell {
+    margin: 0;
+  }
+
+  .analysis-document {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    min-height: auto;
+  }
+
+  .analysis-doc-band {
+    min-height: 56px;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .analysis-doc-title-row {
+    padding: 8px 0 14px;
+  }
+
+  .analysis-doc-title-row h2 {
+    font-size: 28px;
+  }
+
+  .analysis-doc-title-row p,
+  .analysis-action-button {
+    display: none;
+  }
+
+  .analysis-table-wrap,
+  .assessment-stack,
+  .assessment-matrix-card {
+    width: 100%;
+    max-height: none;
+    margin: 0;
+    overflow: visible;
+    border-radius: 0;
+  }
+
+  .assessment-stack {
+    gap: 10px;
+    padding: 0;
+  }
+
+  .analysis-grid-table,
+  .monthly-analysis-table,
+  .assessment-matrix-card .analysis-grid-table {
+    min-width: 0;
+  }
+
+  .analysis-grid-table th,
+  .analysis-grid-table td {
+    height: 34px;
+    padding: 4px;
+    font-size: 9px;
   }
 
   .region-grid {
