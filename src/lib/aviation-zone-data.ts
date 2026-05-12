@@ -213,9 +213,49 @@ const nationalAviationCatalogSeeds: AviationCatalogSeed[] = [
   { id: "air-jeju", label: "제주", name: "제주공항 관측권", sector: "제주권 · 북부 접근", regionGroup: "jeju", stationKind: "airport", center: [33.51, 126.49], wind: 11.4, gust: 21.0, visibility: 4.2, ceiling: 1000, weatherStatus: "비", lightningRisk: "주의" },
   { id: "air-seogwipo", label: "서귀포", name: "서귀포 남부 회랑", sector: "제주권 · 남부 해안", regionGroup: "jeju", stationKind: "corridor", center: [33.25, 126.56], wind: 8.2, gust: 14.0, visibility: 6.0, ceiling: 1800, weatherStatus: "흐림" },
   { id: "air-seongsan", label: "성산", name: "성산 동부 관측권", sector: "제주권 · 동부 해안", regionGroup: "jeju", stationKind: "weatherStation", center: [33.39, 126.88], wind: 7.2, gust: 12.6, visibility: 7.0, ceiling: 2200 },
+  { id: "air-seoul", label: "서울", name: "서울 도심 항공기상 관측권", sector: "수도권 · 도심 저고도", regionGroup: "capital", stationKind: "weatherStation", center: [37.57, 126.98], wind: 4.5, gust: 8.0, visibility: 7.2, ceiling: 2800 },
+  { id: "air-yongin", label: "용인", name: "용인 남부 회랑", sector: "수도권 · 남부 저고도", regionGroup: "capital", stationKind: "corridor", center: [37.24, 127.18], wind: 5.4, gust: 9.6, visibility: 6.8, ceiling: 2400 },
+  { id: "air-baengnyeong", label: "백령", name: "백령도 해상 공역", sector: "수도권 · 서해 원거리", regionGroup: "capital", stationKind: "weatherStation", center: [37.96, 124.67], wind: 10.6, gust: 18.4, visibility: 5.0, ceiling: 1200, weatherStatus: "흐림" },
+  { id: "air-sokcho", label: "속초", name: "속초 동해안 회랑", sector: "강원권 · 동해 저고도", regionGroup: "gangwon", stationKind: "corridor", center: [38.2, 128.59], wind: 8.4, gust: 15.0, visibility: 5.8, ceiling: 1450, weatherStatus: "흐림" },
+  { id: "air-taebaek", label: "태백", name: "태백 산악 공역", sector: "강원권 · 산악 고지", regionGroup: "gangwon", stationKind: "weatherStation", center: [37.16, 128.99], wind: 9.4, gust: 17.0, visibility: 4.8, ceiling: 1050, fogLevel: "의심" },
+  { id: "air-cheonan", label: "천안", name: "천안 내륙 회랑", sector: "충청권 · 북부 내륙", regionGroup: "chungcheong", stationKind: "corridor", center: [36.82, 127.11], wind: 4.4, gust: 7.8, visibility: 8.2, ceiling: 3200 },
+  { id: "air-asan", label: "아산", name: "아산 서해 접근 회랑", sector: "충청권 · 서북부", regionGroup: "chungcheong", stationKind: "corridor", center: [36.79, 127.0], wind: 5.2, gust: 9.4, visibility: 7.4, ceiling: 2700 },
+  { id: "air-mokpo", label: "목포", name: "목포 서남해 공역", sector: "호남권 · 서남해 접근", regionGroup: "honam", stationKind: "weatherStation", center: [34.81, 126.39], wind: 7.8, gust: 14.6, visibility: 5.4, ceiling: 1600, weatherStatus: "흐림" },
+  { id: "air-suncheon", label: "순천", name: "순천 남해 내륙 회랑", sector: "호남권 · 남부 내륙", regionGroup: "honam", stationKind: "corridor", center: [34.95, 127.49], wind: 5.0, gust: 9.2, visibility: 7.2, ceiling: 2600 },
+  { id: "air-gyeongju", label: "경주", name: "경주 동해 내륙 회랑", sector: "영남권 · 동해 내륙", regionGroup: "yeongnam", stationKind: "corridor", center: [35.86, 129.22], wind: 5.6, gust: 10.0, visibility: 7.0, ceiling: 2400 },
+  { id: "air-geoje", label: "거제", name: "거제 남해 공역", sector: "영남권 · 남해 접근", regionGroup: "yeongnam", stationKind: "weatherStation", center: [34.88, 128.62], wind: 8.4, gust: 15.6, visibility: 5.6, ceiling: 1550, weatherStatus: "흐림" },
+  { id: "air-ulleung", label: "울릉", name: "울릉도 해상 공역", sector: "영남권 · 동해 원거리", regionGroup: "yeongnam", stationKind: "weatherStation", center: [37.49, 130.91], wind: 12.6, gust: 22.4, visibility: 5.0, ceiling: 900, weatherStatus: "흐림" },
+  { id: "air-seosan-daesan", label: "대산", name: "서산 대산 저고도 관측권", sector: "충청권 · 서산 북부 해안", regionGroup: "chungcheong", stationKind: "weatherStation", center: [37.0, 126.39], wind: 8.4, gust: 15.2, visibility: 4.9, ceiling: 1450, weatherStatus: "흐림" },
+  { id: "air-seosan-haemi", label: "해미", name: "서산 해미 내륙 관측권", sector: "충청권 · 서산 내륙", regionGroup: "chungcheong", stationKind: "airfield", center: [36.71, 126.54], wind: 6.8, gust: 12.0, visibility: 6.2, ceiling: 2100, weatherStatus: "흐림" },
+  { id: "air-daejeon-yuseong", label: "유성", name: "대전 유성 저고도 관측권", sector: "충청권 · 대전 서북부", regionGroup: "chungcheong", stationKind: "weatherStation", center: [36.36, 127.36], wind: 4.2, gust: 7.8, visibility: 8.8, ceiling: 3400 },
+  { id: "air-seoul-gangnam", label: "강남", name: "서울 강남 도심 회랑", sector: "수도권 · 서울 동남권", regionGroup: "capital", stationKind: "corridor", center: [37.52, 127.05], wind: 4.6, gust: 8.4, visibility: 7.1, ceiling: 2800 },
+  { id: "air-busan-haeundae", label: "해운대", name: "부산 해운대 해안 회랑", sector: "영남권 · 부산 동부 해안", regionGroup: "yeongnam", stationKind: "corridor", center: [35.16, 129.16], wind: 7.4, gust: 13.8, visibility: 5.9, ceiling: 1700, weatherStatus: "흐림" },
 ];
 
-const nationalAviationZones: AviationZone[] = nationalAviationCatalogSeeds.map((seed) => ({
+const additionalAviationCatalogSeeds: AviationCatalogSeed[] = [
+  { id: "air-seongnam", label: "성남", name: "성남 도심 저고도 관측권", sector: "수도권 · 남동 도심", regionGroup: "capital", stationKind: "weatherStation", center: [37.42, 127.13], wind: 4.8, gust: 8.8, visibility: 7.0, ceiling: 2600 },
+  { id: "air-osan", label: "오산", name: "오산 항공기상 관측권", sector: "수도권 · 남부 회랑", regionGroup: "capital", stationKind: "airfield", center: [37.09, 127.03], wind: 6.2, gust: 11.4, visibility: 6.5, ceiling: 2200 },
+  { id: "air-pyeongtaek", label: "평택", name: "평택 서해 저고도 관측권", sector: "수도권 · 서해 평야", regionGroup: "capital", stationKind: "corridor", center: [36.99, 127.11], wind: 6.0, gust: 10.8, visibility: 6.6, ceiling: 2300 },
+  { id: "air-chuncheon", label: "춘천", name: "춘천 분지 항공기상 관측권", sector: "강원권 · 내륙 분지", regionGroup: "gangwon", stationKind: "weatherStation", center: [37.88, 127.73], wind: 5.0, gust: 9.8, visibility: 6.6, ceiling: 2100, fogLevel: "의심" },
+  { id: "air-samcheok", label: "삼척", name: "삼척 동해안 회랑", sector: "강원권 · 동해 남부", regionGroup: "gangwon", stationKind: "corridor", center: [37.45, 129.17], wind: 9.0, gust: 16.4, visibility: 5.3, ceiling: 1350, weatherStatus: "흐림" },
+  { id: "air-hongseong", label: "홍성", name: "홍성 서해 내륙 회랑", sector: "충청권 · 서해 내륙", regionGroup: "chungcheong", stationKind: "corridor", center: [36.6, 126.66], wind: 5.8, gust: 10.2, visibility: 6.8, ceiling: 2400 },
+  { id: "air-boryeong", label: "보령", name: "보령 서해안 공역", sector: "충청권 · 대천 해안", regionGroup: "chungcheong", stationKind: "weatherStation", center: [36.33, 126.61], wind: 7.4, gust: 13.2, visibility: 5.8, ceiling: 1850, weatherStatus: "흐림" },
+  { id: "air-seocheon", label: "서천", name: "서천 남부 서해 공역", sector: "충청권 · 남부 서해", regionGroup: "chungcheong", stationKind: "weatherStation", center: [36.08, 126.69], wind: 7.0, gust: 12.8, visibility: 5.6, ceiling: 1800, weatherStatus: "흐림" },
+  { id: "air-jeonju", label: "전주", name: "전주 내륙 항공기상 관측권", sector: "호남권 · 내륙 중심", regionGroup: "honam", stationKind: "weatherStation", center: [35.82, 127.15], wind: 4.0, gust: 8.0, visibility: 7.4, ceiling: 2800 },
+  { id: "air-gwangyang", label: "광양", name: "광양 남해안 회랑", sector: "호남권 · 남해 산업권", regionGroup: "honam", stationKind: "corridor", center: [34.94, 127.7], wind: 7.2, gust: 13.4, visibility: 5.7, ceiling: 1700, weatherStatus: "흐림" },
+  { id: "air-wando", label: "완도", name: "완도 남해 도서 공역", sector: "호남권 · 남해 도서", regionGroup: "honam", stationKind: "weatherStation", center: [34.31, 126.76], wind: 8.2, gust: 15.0, visibility: 5.2, ceiling: 1500, weatherStatus: "흐림" },
+  { id: "air-andong", label: "안동", name: "안동 내륙 항공기상 관측권", sector: "영남권 · 북부 내륙", regionGroup: "yeongnam", stationKind: "weatherStation", center: [36.57, 128.73], wind: 4.4, gust: 8.6, visibility: 7.8, ceiling: 3000 },
+  { id: "air-yeongju", label: "영주", name: "영주 산악 회랑", sector: "영남권 · 북부 산지", regionGroup: "yeongnam", stationKind: "corridor", center: [36.81, 128.62], wind: 6.4, gust: 12.2, visibility: 6.4, ceiling: 1900, fogLevel: "의심" },
+  { id: "air-changwon", label: "창원", name: "창원 남해안 항공기상 관측권", sector: "영남권 · 남해안", regionGroup: "yeongnam", stationKind: "weatherStation", center: [35.23, 128.68], wind: 6.6, gust: 12.4, visibility: 6.0, ceiling: 1950, weatherStatus: "흐림" },
+  { id: "air-tongyeong", label: "통영", name: "통영 남해 도서 공역", sector: "영남권 · 남해 도서", regionGroup: "yeongnam", stationKind: "corridor", center: [34.85, 128.43], wind: 8.0, gust: 14.8, visibility: 5.6, ceiling: 1600, weatherStatus: "흐림" },
+  { id: "air-uljin", label: "울진", name: "울진 동해안 회랑", sector: "영남권 · 동해 중부", regionGroup: "yeongnam", stationKind: "corridor", center: [36.99, 129.4], wind: 9.2, gust: 16.8, visibility: 5.5, ceiling: 1400, weatherStatus: "흐림" },
+  { id: "air-jeju-hallim", label: "한림", name: "제주 한림 서부 회랑", sector: "제주권 · 서부 해안", regionGroup: "jeju", stationKind: "corridor", center: [33.41, 126.27], wind: 9.4, gust: 17.2, visibility: 5.4, ceiling: 1400, weatherStatus: "흐림" },
+  { id: "air-jeju-seongsan-detail", label: "성산", name: "제주 성산 동부 회랑", sector: "제주권 · 동부 해안", regionGroup: "jeju", stationKind: "corridor", center: [33.39, 126.88], wind: 8.8, gust: 16.0, visibility: 5.8, ceiling: 1500, weatherStatus: "흐림" },
+];
+
+const mergedAviationCatalogSeeds = [...nationalAviationCatalogSeeds, ...additionalAviationCatalogSeeds];
+
+const nationalAviationZones: AviationZone[] = mergedAviationCatalogSeeds.map((seed) => ({
   id: seed.id,
   label: seed.label,
   name: seed.name,

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "백룡 기상판단 지원체계",
-  description: "해상·육상·항공 상황을 분리 운용하는 설명가능 판단지원 대시보드",
+  title: "백룡 AI The One",
+  description: "휴리스틱 기반 작전기상 판단지원 정적 웹앱",
 };
 
 export default function RootLayout({

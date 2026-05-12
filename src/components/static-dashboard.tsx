@@ -1904,7 +1904,7 @@ const windyOverlayLabels: Record<WindyOverlay, string> = {
 const coastalWindyOverlays: WindyOverlay[] = ["waves", "wind", "rain", "clouds"];
 const weatherWindyOverlays: WindyOverlay[] = ["wind", "rain", "temp", "clouds"];
 
-function windyGenericEmbedUrl(lat: number, lon: number, overlay = "wind", zoom = "8") {
+function windyGenericEmbedUrl(lat: number, lon: number, overlay: WindyOverlay = "wind", zoom = "8") {
   const url = createUrl(WINDY_EMBED_BASE_URL, {
     lat: lat.toFixed(3),
     lon: lon.toFixed(3),
@@ -1913,7 +1913,7 @@ function windyGenericEmbedUrl(lat: number, lon: number, overlay = "wind", zoom =
     zoom,
     level: "surface",
     overlay,
-    product: overlay === "waves" ? "gfsWaves" : "ecmwf",
+    product: windyProductForOverlay(overlay),
     menu: "true",
     message: "true",
     marker: "true",
@@ -1932,7 +1932,7 @@ function windyGenericEmbedUrl(lat: number, lon: number, overlay = "wind", zoom =
 }
 
 function windyProductForOverlay(overlay: WindyOverlay) {
-  return overlay === "waves" ? "gfsWaves" : "ecmwf";
+  return overlay === "waves" ? "ecmwfWaves" : "ecmwf";
 }
 
 function windyLandEmbedUrl(item: LandAssessment, overlay: WindyOverlay) {
@@ -2545,6 +2545,52 @@ function isChinaMarineRegion(region: Pick<Region, "marineGroup" | "name">) {
   return region.marineGroup === "chinaYellowSea" || region.marineGroup === "chinaEastSea" || region.name.startsWith("중국");
 }
 
+function isOffshoreRegion(region: Pick<Region, "seaArea">) {
+  return region.seaArea === "offshore";
+}
+
+type MarineTideDisplay = {
+  isOffshore: boolean;
+  tideAge: string;
+  lowLabel: string;
+  highLabel: string;
+  lowValue: string;
+  highValue: string;
+  lowSecond?: string;
+  highSecond?: string;
+  href: string;
+  note: string;
+};
+
+// 원해는 조석 현상은 있지만 항만 기준 간조·만조 시각을 그대로 표시하면 오해가 생겨 별도 문구로 분리한다.
+function marineTideDisplay(region: ResolvedRegion | Region, row: MarineRow): MarineTideDisplay {
+  if (isOffshoreRegion(region)) {
+    return {
+      isOffshore: true,
+      tideAge: "원해 참고",
+      lowLabel: "조석",
+      highLabel: "확인",
+      lowValue: "인근 조위",
+      highValue: "조류·파고",
+      href: windyDirectUrl(region),
+      note: "원해는 항구식 간조·만조 시각보다 인근 조위와 조류·파고를 함께 확인합니다.",
+    };
+  }
+
+  return {
+    isOffshore: false,
+    tideAge: row.tideAge,
+    lowLabel: "간조",
+    highLabel: "만조",
+    lowValue: row.lowTide,
+    lowSecond: row.lowTide2,
+    highValue: row.highTide,
+    highSecond: row.highTide2,
+    href: region.badatimeUrl,
+    note: "연안·항만 기준 조석",
+  };
+}
+
 async function fetchOfficialBundle(region: Region): Promise<OfficialBundle> {
   const row: MarineRow = { ...region.fixed };
   let weather = fallbackWeather(region);
@@ -2912,6 +2958,15 @@ function TideTimes({ first, second }: { first: string; second?: string }) {
   );
 }
 
+function TideReference({ primary, secondary }: { primary: string; secondary: string }) {
+  return (
+    <span className="tide-times tide-reference">
+      <span>{primary}</span>
+      <span>{secondary}</span>
+    </span>
+  );
+}
+
 function WindyOverlaySelector({
   value,
   options,
@@ -3081,21 +3136,30 @@ function WeatherTable({
   displayRegions: ResolvedRegion[];
   rows: Record<RegionKey, MarineRow>;
 }) {
+  const tableItems = displayRegions.map((region) => {
+    const row = rows[region.key] || region.fixed;
+
+    return {
+      region,
+      row,
+      tide: marineTideDisplay(region, row),
+      focused: region.key === activeRegion.key,
+    };
+  });
+
   return (
-    <div className="weather-table-wrap">
-      <table className="weather-table">
-        <thead>
-          <tr>
-            {columns.map((column) => (
-              <th key={column}>{column}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {displayRegions.map((region) => {
-            const focused = region.key === activeRegion.key;
-            const row = rows[region.key] || region.fixed;
-            return (
+    <>
+      <div className="weather-table-wrap">
+        <table className="weather-table">
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th key={column}>{column}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tableItems.map(({ region, row, tide, focused }) => (
               <tr key={region.key} className={focused ? "selected-row" : undefined}>
                 <th>
                   <a href={region.badatimeUrl} target="_blank" rel="noreferrer">
@@ -3107,23 +3171,96 @@ function WeatherTable({
                 <DetailCell href={region.badatimeUrl}>{row.alert}</DetailCell>
                 <DetailCell href={region.badatimeUrl}>{row.overview}</DetailCell>
                 <DetailCell href={region.badatimeUrl}>{row.wave}</DetailCell>
-                <DetailCell href={region.badatimeUrl}>{row.tideAge}</DetailCell>
-                <DetailCell href={region.badatimeUrl}>
-                  <TideTimes first={row.lowTide} second={row.lowTide2} />
+                <DetailCell href={tide.href}>{tide.tideAge}</DetailCell>
+                <DetailCell href={tide.href}>
+                  {tide.isOffshore ? (
+                    <TideReference primary={tide.lowValue} secondary="참고" />
+                  ) : (
+                    <TideTimes first={tide.lowValue} second={tide.lowSecond} />
+                  )}
                 </DetailCell>
-                <DetailCell href={region.badatimeUrl}>
-                  <TideTimes first={row.highTide} second={row.highTide2} />
+                <DetailCell href={tide.href}>
+                  {tide.isOffshore ? (
+                    <TideReference primary={tide.highValue} secondary="중심 확인" />
+                  ) : (
+                    <TideTimes first={tide.highValue} second={tide.highSecond} />
+                  )}
                 </DetailCell>
                 <DetailCell href={region.badatimeUrl}>{row.waterTemp}</DetailCell>
                 <DetailCell href={region.badatimeUrl}>{row.windDirection}</DetailCell>
                 <DetailCell href={region.badatimeUrl}>{row.windSpeed}</DetailCell>
                 <DetailCell href={windyDirectUrl(region)}>{row.current}</DetailCell>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="weather-mobile-card-list" aria-label="해상상황 모바일 카드">
+        {tableItems.map(({ region, row, tide, focused }) => (
+          <article key={`mobile-weather-${region.key}`} className={`weather-mobile-card ${focused ? "active" : ""}`}>
+            <header>
+              <div>
+                <strong>{region.name}</strong>
+                <span>{seaAreaLabels[region.seaArea]} · {region.harborName}</span>
+              </div>
+              <em>{row.overview}</em>
+            </header>
+            <dl>
+              <div>
+                <dt>특보</dt>
+                <dd>{row.alert}</dd>
+              </div>
+              <div>
+                <dt>파고</dt>
+                <dd>{row.wave}</dd>
+              </div>
+              <div>
+                <dt>조석</dt>
+                <dd>{tide.tideAge}</dd>
+              </div>
+              <div>
+                <dt>{tide.lowLabel}</dt>
+                <dd>
+                  {tide.isOffshore
+                    ? tide.lowValue
+                    : `${tide.lowValue} / ${tide.lowSecond || addHours(tide.lowValue, 12)}`}
+                </dd>
+              </div>
+              <div>
+                <dt>{tide.highLabel}</dt>
+                <dd>
+                  {tide.isOffshore
+                    ? tide.highValue
+                    : `${tide.highValue} / ${tide.highSecond || addHours(tide.highValue, 12)}`}
+                </dd>
+              </div>
+              <div>
+                <dt>수온</dt>
+                <dd>{row.waterTemp}</dd>
+              </div>
+              <div>
+                <dt>풍향/풍속</dt>
+                <dd>{row.windDirection} · {row.windSpeed}</dd>
+              </div>
+              <div>
+                <dt>조류</dt>
+                <dd>{row.current}</dd>
+              </div>
+            </dl>
+            {tide.isOffshore ? <p>{tide.note}</p> : null}
+          </article>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function EmptySelectionState({ title, message }: { title: string; message: string }) {
+  return (
+    <section className="empty-selection-state" role="status">
+      <strong>{title}</strong>
+      <p>{message}</p>
+    </section>
   );
 }
 
@@ -4484,7 +4621,7 @@ function ZoneDecisionPanel({ item }: { item: ZoneAssessment }) {
         </div>
       </div>
 
-      <section className="decision-section">
+      <section className="decision-section decision-data-section">
         <div className="section-title">
           <ShieldCheck size={18} aria-hidden="true" />
           <h3>현재 주요 데이터</h3>
@@ -4492,7 +4629,7 @@ function ZoneDecisionPanel({ item }: { item: ZoneAssessment }) {
         <EnvironmentGrid data={zone.data} />
       </section>
 
-      <section className="decision-section">
+      <section className="decision-section decision-contribution-section">
         <div className="section-title">
           <Activity size={18} aria-hidden="true" />
           <h3>항목별 기여도</h3>
@@ -4500,7 +4637,7 @@ function ZoneDecisionPanel({ item }: { item: ZoneAssessment }) {
         <ContributionBars assessment={assessment} />
       </section>
 
-      <section className="decision-section">
+      <section className="decision-section decision-rules-section">
         <div className="section-title">
           <AlertTriangle size={18} aria-hidden="true" />
           <h3>XAI 판단 근거</h3>
@@ -5280,7 +5417,7 @@ type MarineMonthlyDayRow = {
   moonlight: string;
   tideAge: string;
   isToday: boolean;
-  tides: Record<string, { high: string; low: string }>;
+  tides: Record<string, { high: string; low: string; isOffshore: boolean }>;
 };
 
 type MarineAssessmentTableRow = {
@@ -5356,6 +5493,18 @@ function shiftedTideValue(primary: string, secondary: string | undefined, dayInd
   return `${first} / ${second}`;
 }
 
+function monthlyTideValue(source: MarineAnalysisSource, kind: "high" | "low", dayIndex: number) {
+  const tide = marineTideDisplay(source.region, source.row);
+
+  if (tide.isOffshore) {
+    return kind === "high" ? "조류·파고 중심" : "인근 조위 참고";
+  }
+
+  return kind === "high"
+    ? shiftedTideValue(source.row.highTide, source.row.highTide2, dayIndex)
+    : shiftedTideValue(source.row.lowTide, source.row.lowTide2, dayIndex);
+}
+
 function buildMonthlyAnalysisRows(
   regions: ResolvedRegion[],
   rows: Record<RegionKey, MarineRow>,
@@ -5376,14 +5525,15 @@ function buildMonthlyAnalysisRows(
 
   return Array.from({ length: daysInMonth }, (_, index): MarineMonthlyDayRow => {
     const day = index + 1;
-    const tideReference = primarySource.row;
+    const tideReference = marineTideDisplay(primarySource.region, primarySource.row);
     const tides = Object.fromEntries(
       sources.map((source) => {
         return [
           source.region.key,
           {
-            high: shiftedTideValue(source.row.highTide, source.row.highTide2, index),
-            low: shiftedTideValue(source.row.lowTide, source.row.lowTide2, index),
+            high: monthlyTideValue(source, "high", index),
+            low: monthlyTideValue(source, "low", index),
+            isOffshore: isOffshoreRegion(source.region),
           },
         ];
       }),
@@ -5457,6 +5607,7 @@ function evaluateMarineAssessment(row: MarineRow, weather: WeatherNow) {
 function buildMarineAssessmentRow(source: MarineAnalysisSource): MarineAssessmentTableRow {
   const visibility = marineVisibilityCondition(source.row, source.weather);
   const evaluation = evaluateMarineAssessment(source.row, source.weather);
+  const tide = marineTideDisplay(source.region, source.row);
 
   return {
     label: source.label,
@@ -5464,7 +5615,7 @@ function buildMarineAssessmentRow(source: MarineAnalysisSource): MarineAssessmen
     alert: source.row.alert,
     wavePrimary: source.row.wave,
     waveSecondary: secondaryWaveLabel(source.row),
-    tideAge: source.row.tideAge,
+    tideAge: tide.tideAge,
     current: source.row.current,
     waterTemp: source.row.waterTemp,
     vulnerableTime: currentVulnerableTimeLabel(),
@@ -5533,6 +5684,17 @@ function MarineMonthlyAnalysisView({
   tableReferenceTime: string;
   onOpenSettings: () => void;
 }) {
+  if (!regions.length) {
+    return (
+      <section className="marine-analysis-view" aria-label="월간 기상분석표">
+        <EmptySelectionState
+          title="월간분석표에 반영할 위치가 없습니다."
+          message="설정에서 해상 위치를 선택하면 월광, 일출·일몰, 조석 참고 정보가 표시됩니다."
+        />
+      </section>
+    );
+  }
+
   const analysisSources = regions.map((region) => resolveMarineAnalysisSourceFromRegion(region, tableRows, weatherByRegion));
   const monthRows = buildMonthlyAnalysisRows(regions, tableRows, weatherByRegion);
   const tableMinWidth = Math.max(820, 610 + analysisSources.length * 170);
@@ -5626,11 +5788,11 @@ function MarineMonthlyAnalysisView({
                     </div>
                     <dl>
                       <div>
-                        <dt>만조</dt>
+                        <dt>{row.tides[source.region.key].isOffshore ? "확인" : "만조"}</dt>
                         <dd>{row.tides[source.region.key].high}</dd>
                       </div>
                       <div>
-                        <dt>간조</dt>
+                        <dt>{row.tides[source.region.key].isOffshore ? "조석" : "간조"}</dt>
                         <dd>{row.tides[source.region.key].low}</dd>
                       </div>
                     </dl>
@@ -5789,6 +5951,17 @@ function MarineAccessAssessmentView({
   tableReferenceTime: string;
   onOpenSettings: () => void;
 }) {
+  if (!regions.length) {
+    return (
+      <section className="marine-analysis-view" aria-label="해상 접근 가능성 판단표">
+        <EmptySelectionState
+          title="접근판단표에 반영할 위치가 없습니다."
+          message="설정에서 해상 위치를 선택하면 출항·접안 판단표가 표시됩니다."
+        />
+      </section>
+    );
+  }
+
   const analysisSources = regions.map((region) => resolveMarineAnalysisSourceFromRegion(region, tableRows, weatherByRegion));
   const outboundRows = analysisSources
     .filter((source) => isChinaMarineRegion(source.region))
@@ -5849,13 +6022,24 @@ function MarineDashboardView({
 }: {
   displayRegions: ResolvedRegion[];
   activeKey: RegionKey;
-  activeRegion: ResolvedRegion;
+  activeRegion?: ResolvedRegion;
   weatherByRegion: Record<RegionKey, WeatherNow>;
   hourlyByRegion: Record<RegionKey, HourlyWeather[]>;
   tableRows: Record<RegionKey, MarineRow>;
   tableReferenceTime: string;
   onSelectRegion: (region: RegionKey) => void;
 }) {
+  if (!displayRegions.length || !activeRegion) {
+    return (
+      <section className="marine-view" aria-label="해양상황 화면">
+        <EmptySelectionState
+          title="선택된 해상 위치가 없습니다."
+          message="설정에서 연안, 해안, 원해 위치를 선택하면 시간별 기상과 해양상황 표가 표시됩니다."
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="marine-view" aria-label="해양상황 화면">
       <section className="region-grid" aria-label="지역별 실시간 날씨 카드">
@@ -5900,11 +6084,22 @@ function BladeDashboardView({
 }: {
   zoneAssessments: ZoneAssessment[];
   activeZoneId: CoastalZone["id"];
-  activeZoneAssessment: ZoneAssessment;
+  activeZoneAssessment?: ZoneAssessment;
   windyOverlay: WindyOverlay;
   onSelectZone: (zoneId: CoastalZone["id"]) => void;
   onWindyOverlayChange: (overlay: WindyOverlay) => void;
 }) {
+  if (!zoneAssessments.length || !activeZoneAssessment) {
+    return (
+      <section className="blade-view" aria-label="해상 판단지원 화면">
+        <EmptySelectionState
+          title="선택된 해상 위치가 없습니다."
+          message="설정에서 해상 위치를 선택하면 지도와 판단 근거가 표시됩니다."
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="blade-view" aria-label="해상 판단지원 화면">
       <section className="blade-workspace">
@@ -6087,6 +6282,18 @@ function LandDashboardView({
     filteredAssessments.find((item) => item.zone.id === activeLandZoneId) ||
     filteredAssessments[0] ||
     landAssessments[0];
+
+  if (!activeItem) {
+    return (
+      <section className="land-view" aria-label="육상 화면">
+        <EmptySelectionState
+          title="선택된 육상 지역이 없습니다."
+          message="설정에서 육상 지역을 선택하면 지도와 판단 근거가 표시됩니다."
+        />
+      </section>
+    );
+  }
+
   const levelColor = riskLevelColor(activeItem.assessment.level);
 
   return (
@@ -6187,6 +6394,18 @@ function LandTableView({
     filteredAssessments.find((item) => item.zone.id === activeLandZoneId) ||
     filteredAssessments[0] ||
     landAssessments[0];
+
+  if (!activeItem) {
+    return (
+      <section className="land-view land-table-view" aria-label="육상 표 화면">
+        <EmptySelectionState
+          title="선택된 육상 지역이 없습니다."
+          message="설정에서 육상 지역을 선택하면 카드, 시간별 기상, 정리표가 표시됩니다."
+        />
+      </section>
+    );
+  }
+
   const cardItems = filteredAssessments.map((item) => ({
     id: item.zone.id,
     label: item.zone.label,
@@ -6385,6 +6604,18 @@ function AviationDashboardView({
   const activeItem =
     aviationAssessments.find((item) => item.zone.id === activeAviationZoneId) ||
     aviationAssessments[0];
+
+  if (!activeItem) {
+    return (
+      <section className="land-view aviation-view" aria-label="항공 화면">
+        <EmptySelectionState
+          title="선택된 항공 측정지역이 없습니다."
+          message="설정에서 항공 측정지역을 선택하면 지도와 판단 근거가 표시됩니다."
+        />
+      </section>
+    );
+  }
+
   const levelColor = riskLevelColor(activeItem.assessment.level);
 
   return (
@@ -6485,6 +6716,18 @@ function AviationTableView({
     filteredAssessments.find((item) => item.zone.id === activeAviationZoneId) ||
     filteredAssessments[0] ||
     aviationAssessments[0];
+
+  if (!activeItem) {
+    return (
+      <section className="land-view aviation-table-view" aria-label="항공 표 화면">
+        <EmptySelectionState
+          title="선택된 항공 측정지역이 없습니다."
+          message="설정에서 항공 측정지역을 선택하면 카드, 시간별 기상, 정리표가 표시됩니다."
+        />
+      </section>
+    );
+  }
+
   const cardItems = filteredAssessments.map((item) => ({
     id: item.zone.id,
     label: item.zone.label,
@@ -6664,8 +6907,7 @@ function DashboardWorkspace({
 
   const visibleRegions = useMemo(() => {
     const enabledSet = new Set(enabledRegionKeys);
-    const filtered = allRegions.filter((region) => enabledSet.has(region.key));
-    return filtered.length ? filtered : allRegions.slice(0, 1);
+    return allRegions.filter((region) => enabledSet.has(region.key));
   }, [allRegions, enabledRegionKeys]);
 
   const effectiveHarborSelections = useMemo(
@@ -6689,14 +6931,12 @@ function DashboardWorkspace({
 
   const visibleLandZoneList = useMemo(() => {
     const enabledSet = new Set(enabledLandZoneIds);
-    const filtered = landZoneList.filter((zone) => enabledSet.has(zone.id));
-    return filtered.length ? filtered : landZoneList.slice(0, 1);
+    return landZoneList.filter((zone) => enabledSet.has(zone.id));
   }, [enabledLandZoneIds, landZoneList]);
 
   const visibleAviationZoneList = useMemo(() => {
     const enabledSet = new Set(enabledAviationZoneIds);
-    const filtered = aviationZoneList.filter((zone) => enabledSet.has(zone.id));
-    return filtered.length ? filtered : aviationZoneList.slice(0, 1);
+    return aviationZoneList.filter((zone) => enabledSet.has(zone.id));
   }, [aviationZoneList, enabledAviationZoneIds]);
 
   const effectiveActiveKey = useMemo(
@@ -6852,7 +7092,7 @@ function DashboardWorkspace({
     setTableRows(Object.fromEntries(systemRegions.map((region) => [region.key, region.fixed])) as Record<RegionKey, MarineRow>);
   }, []);
 
-	  const handleRemoveRegion = useCallback((region: RegionKey) => {
+  const handleRemoveRegion = useCallback((region: RegionKey) => {
     setCustomRegionConfigs((current) => {
       const next = current.filter((item) => item.key !== region);
       window.localStorage.setItem(CUSTOM_REGIONS_STORAGE_KEY, JSON.stringify(next));
@@ -6869,7 +7109,7 @@ function DashboardWorkspace({
       window.localStorage.setItem(HARBOR_STORAGE_KEY, JSON.stringify(next));
       return next;
     });
-	  }, []);
+  }, []);
 
   const handleRemoveLandZone = useCallback((zoneId: LandZone["id"]) => {
     setCustomLandZoneConfigs((current) => {
@@ -7250,27 +7490,27 @@ function DashboardWorkspace({
               embedded
               regions={settingsRegions}
               enabledRegionKeys={enabledRegionKeys}
-	              harborSelections={effectiveHarborSelections}
-	              customRegionKeys={customRegionConfigs.map((region) => region.key)}
-	              landZoneList={landZoneList}
-	              enabledLandZoneIds={enabledLandZoneIds}
-	              customLandZoneKeys={customLandZoneConfigs.map((zone) => zone.id)}
-	              aviationZoneList={aviationZoneList}
-	              enabledAviationZoneIds={enabledAviationZoneIds}
-	              customAviationZoneKeys={customAviationZoneConfigs.map((zone) => zone.id)}
-	              initialTab={operationMode === "land" ? "land" : operationMode === "air" ? "air" : "marine"}
-	              onClose={() => setActiveView(operationMode === "land" ? "land" : operationMode === "air" ? "air" : "blade")}
-	              onToggleRegion={handleToggleRegion}
-	              onToggleLandZone={handleToggleLandZone}
-	              onToggleLandZoneGroup={handleToggleLandZoneGroup}
-	              onSetLandZoneSelectionMode={handleSetLandZoneSelectionMode}
-	              onToggleAviationZone={handleToggleAviationZone}
-	              onRemoveRegion={handleRemoveRegion}
-	              onRemoveLandZone={handleRemoveLandZone}
-	              onRemoveAviationZone={handleRemoveAviationZone}
-	              onHarborChange={handleHarborChange}
-	              onResetAllSettings={handleResetAllSettings}
-	            />
+              harborSelections={effectiveHarborSelections}
+              customRegionKeys={customRegionConfigs.map((region) => region.key)}
+              landZoneList={landZoneList}
+              enabledLandZoneIds={enabledLandZoneIds}
+              customLandZoneKeys={customLandZoneConfigs.map((zone) => zone.id)}
+              aviationZoneList={aviationZoneList}
+              enabledAviationZoneIds={enabledAviationZoneIds}
+              customAviationZoneKeys={customAviationZoneConfigs.map((zone) => zone.id)}
+              initialTab={operationMode === "land" ? "land" : operationMode === "air" ? "air" : "marine"}
+              onClose={() => setActiveView(operationMode === "land" ? "land" : operationMode === "air" ? "air" : "blade")}
+              onToggleRegion={handleToggleRegion}
+              onToggleLandZone={handleToggleLandZone}
+              onToggleLandZoneGroup={handleToggleLandZoneGroup}
+              onSetLandZoneSelectionMode={handleSetLandZoneSelectionMode}
+              onToggleAviationZone={handleToggleAviationZone}
+              onRemoveRegion={handleRemoveRegion}
+              onRemoveLandZone={handleRemoveLandZone}
+              onRemoveAviationZone={handleRemoveAviationZone}
+              onHarborChange={handleHarborChange}
+              onResetAllSettings={handleResetAllSettings}
+            />
           ) : activeView === "air" ? (
             <AviationDashboardView
               aviationZoneList={visibleAviationZoneList}
@@ -7286,19 +7526,19 @@ function DashboardWorkspace({
               onSelectAviationZone={setActiveAviationZoneId}
             />
           ) : activeView === "land" ? (
-	            <LandDashboardView
-	              landZoneList={visibleLandZoneList}
-	              activeLandZoneId={activeLandZoneId}
-	              onSelectLandZone={setActiveLandZoneId}
-	              windyOverlay={windyOverlays.land}
-	              onWindyOverlayChange={handleWindyOverlayChange}
-	            />
-	          ) : activeView === "landTable" ? (
-	            <LandTableView
-	              landZoneList={visibleLandZoneList}
-	              activeLandZoneId={activeLandZoneId}
-	              onSelectLandZone={setActiveLandZoneId}
-	            />
+            <LandDashboardView
+              landZoneList={visibleLandZoneList}
+              activeLandZoneId={activeLandZoneId}
+              onSelectLandZone={setActiveLandZoneId}
+              windyOverlay={windyOverlays.land}
+              onWindyOverlayChange={handleWindyOverlayChange}
+            />
+          ) : activeView === "landTable" ? (
+            <LandTableView
+              landZoneList={visibleLandZoneList}
+              activeLandZoneId={activeLandZoneId}
+              onSelectLandZone={setActiveLandZoneId}
+            />
           ) : activeView === "marine" ? (
             <MarineDashboardView
               displayRegions={displayRegions}
