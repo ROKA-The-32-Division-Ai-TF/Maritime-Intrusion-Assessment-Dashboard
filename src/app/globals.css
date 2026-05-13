@@ -1985,7 +1985,7 @@ button.metric-card {
 
 .settings-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
@@ -2209,6 +2209,8 @@ button.metric-card {
   --desktop-blue: #254aa5;
   --desktop-blue-soft: #e9f0ff;
   min-height: 100dvh;
+  width: 100%;
+  min-width: 0;
   display: grid;
   grid-template-columns: 276px minmax(0, 1fr);
   color: var(--desktop-ink);
@@ -2308,10 +2310,12 @@ body:has(.desktop-app) {
 
 .desktop-main {
   min-width: 0;
+  width: 100%;
   display: grid;
   grid-template-rows: auto 1fr;
   gap: 18px;
   padding: 22px;
+  overflow-x: clip;
 }
 
 .desktop-topbar {
@@ -2367,6 +2371,7 @@ body:has(.desktop-app) {
 
 .desktop-live-grid {
   min-height: 0;
+  width: 100%;
   display: grid;
   grid-template-columns: 260px minmax(520px, 1fr) 320px;
   gap: 16px;
@@ -2901,6 +2906,22 @@ body:has(.desktop-app) {
   font-size: 13px;
   line-height: 1.35;
   font-weight: 850;
+}
+
+@media (max-width: 1500px) {
+  .desktop-live-grid {
+    grid-template-columns: 240px minmax(420px, 1fr) 280px;
+    gap: 12px;
+  }
+
+  .desktop-settings-grid {
+    grid-template-columns: minmax(230px, 0.65fr) minmax(420px, 1.35fr) minmax(240px, 0.7fr);
+    gap: 12px;
+  }
+
+  .desktop-main {
+    padding: 20px;
+  }
 }
 
 @media (max-width: 1180px) {

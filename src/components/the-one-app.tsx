@@ -1610,17 +1610,13 @@ function SettingsScreen({ operations, onReset }: { operations: TheOneOperation[]
       <SectionTitle title="설정" />
       <section className="panel-card">
         <h3>저장 상태</h3>
-        <p>현재 브라우저에 {operations.length}개 지역/임무가 저장되어 있습니다.</p>
+        <p>{operations.length}개 지역/임무 저장됨</p>
         <div className="settings-actions">
           <button type="button" className="secondary-action" onClick={onReset}>
             <RotateCcw size={18} />
             전체 초기화
           </button>
         </div>
-      </section>
-      <section className="panel-card">
-        <h3>운용 기준</h3>
-        <p>이 화면은 서버 없이 동작합니다. 추가한 지역과 설정값은 현재 기기와 브라우저 LocalStorage 기준으로 저장됩니다.</p>
       </section>
       <section className="panel-card api-source-card">
         <div className="settings-card-head">
@@ -1629,7 +1625,7 @@ function SettingsScreen({ operations, onReset }: { operations: TheOneOperation[]
           </span>
           <div>
             <h3>데이터 연동 허브</h3>
-            <p>공공자료를 JSON으로 변환해 정적 화면에 연결하는 구조</p>
+            <p>공식자료 · 자동캐시 · 화면반영</p>
           </div>
         </div>
         <div className="api-source-grid">
@@ -1651,7 +1647,7 @@ function SettingsScreen({ operations, onReset }: { operations: TheOneOperation[]
           <b />
           <span>JSON 캐시</span>
           <b />
-          <span>정적 화면</span>
+          <span>화면 반영</span>
         </div>
       </section>
       <section className="panel-card creator-card">
