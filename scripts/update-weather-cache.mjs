@@ -8,13 +8,13 @@ const KMA_NCST_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/
 const KMA_FCST_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst";
 const AIRKOREA_URL = "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty";
 const KASI_RISE_SET_URL = "https://apis.data.go.kr/B090041/openapi/service/RiseSetInfoService/getAreaRiseSetInfo";
-const KHOA_TIDE_URL = "https://www.khoa.go.kr/api/oceangrid/tideObsPreTab/search.do";
+const KHOA_TIDE_URL = "https://khoa.go.kr/oceandata/odmiapi/GetTideFcstHghLwApiService.do";
 
 const operationTargets = [
-  { id: "coastal-seosan", type: "coastal", name: "서산 권역 · 대산 연안", lat: 37.005, lon: 126.352, location: "서산", airStation: "대산", tideEnv: "KHOA_TIDE_OBS_CODE_SEOSAN" },
-  { id: "coastal-dangjin", type: "coastal", name: "당진 권역 · 장고항 일대", lat: 36.96, lon: 126.84, location: "당진", airStation: "당진시청사", tideEnv: "KHOA_TIDE_OBS_CODE_DANGJIN" },
-  { id: "coastal-taean", type: "coastal", name: "태안 권역 · 안흥항 일대", lat: 36.75, lon: 126.29, location: "태안", airStation: "태안읍", tideEnv: "KHOA_TIDE_OBS_CODE_TAEAN" },
-  { id: "coastal-boryeong", type: "coastal", name: "보령 권역 · 대천항 일대", lat: 36.33, lon: 126.61, location: "보령", airStation: "대천2동", tideEnv: "KHOA_TIDE_OBS_CODE_BORYEONG" },
+  { id: "coastal-seosan", type: "coastal", name: "서산 권역 · 대산 연안", lat: 37.005, lon: 126.352, location: "서산", airStation: "대산", tideObsCode: "DT_0017", tideEnv: "KHOA_TIDE_OBS_CODE_SEOSAN" },
+  { id: "coastal-dangjin", type: "coastal", name: "당진 권역 · 장고항 일대", lat: 36.96, lon: 126.84, location: "당진", airStation: "당진시청사", tideObsCode: "SO_1270", tideEnv: "KHOA_TIDE_OBS_CODE_DANGJIN" },
+  { id: "coastal-taean", type: "coastal", name: "태안 권역 · 안흥항 일대", lat: 36.75, lon: 126.29, location: "태안", airStation: "태안읍", tideObsCode: "DT_0067", tideEnv: "KHOA_TIDE_OBS_CODE_TAEAN" },
+  { id: "coastal-boryeong", type: "coastal", name: "보령 권역 · 대천항 일대", lat: 36.33, lon: 126.61, location: "보령", airStation: "대천2동", tideObsCode: "DT_0025", tideEnv: "KHOA_TIDE_OBS_CODE_BORYEONG" },
   { id: "ground-land-seosan", type: "ground", name: "서산시 기상 권역", lat: 36.784, lon: 126.45, location: "서산", airStation: "독곶리" },
   { id: "ground-land-dangjin", type: "ground", name: "당진시 기상 권역", lat: 36.893, lon: 126.629, location: "당진", airStation: "당진시청사" },
   { id: "ground-land-taean", type: "ground", name: "태안군 기상 권역", lat: 36.745, lon: 126.298, location: "태안", airStation: "태안읍" },
@@ -304,25 +304,33 @@ async function fetchRiseSet(target) {
 
 async function fetchTide(target) {
   const serviceKey = apiKey("KHOA_SERVICE_KEY");
-  const obsCode = target.tideEnv ? env(target.tideEnv) : "";
-  if (!serviceKey || !obsCode) return null;
+  const obsCode = (target.tideEnv ? env(target.tideEnv) : "") || target.tideObsCode;
+  if (!obsCode) return null;
+
+  const requestParams = {
+    obsCode,
+    reqDate: ymd(kstNow()),
+    type: "json",
+    numOfRows: 20,
+    pageNo: 1,
+  };
+  if (serviceKey) requestParams.serviceKey = serviceKey;
 
   const json = await fetchJson(KHOA_TIDE_URL, {
-    ServiceKey: serviceKey,
-    ObsCode: obsCode,
-    Date: ymd(kstNow()),
-    ResultType: "json",
+    ...requestParams,
+    isSample: "Y",
   });
-  const tideItems = json?.result?.data ?? json?.result?.Data ?? [];
+  const tideItems = json?.body?.items?.item ?? json?.response?.body?.items?.item ?? [];
   const items = Array.isArray(tideItems) ? tideItems : [tideItems];
-  const highs = items.filter((item) => String(item.hl_code ?? item.HL_CODE).includes("고"));
-  const lows = items.filter((item) => String(item.hl_code ?? item.HL_CODE).includes("저"));
+  const highs = items.filter((item) => ["1", "3"].includes(String(item.extrSe ?? item.EXTR_SE)));
+  const lows = items.filter((item) => ["2", "4"].includes(String(item.extrSe ?? item.EXTR_SE)));
+  const timeOf = (item) => String(item.predcDt ?? item.PREDC_DT ?? "").slice(11, 16);
 
   return {
     source: "국립해양조사원 조석예보",
     values: {
-      highTide: highs.map((item) => String(item.tph_time ?? item.TPH_TIME).slice(11, 16)).filter(Boolean).slice(0, 2).join(" / "),
-      lowTide: lows.map((item) => String(item.tph_time ?? item.TPH_TIME).slice(11, 16)).filter(Boolean).slice(0, 2).join(" / "),
+      highTide: highs.map(timeOf).filter(Boolean).slice(0, 2).join(" / "),
+      lowTide: lows.map(timeOf).filter(Boolean).slice(0, 2).join(" / "),
     },
   };
 }
