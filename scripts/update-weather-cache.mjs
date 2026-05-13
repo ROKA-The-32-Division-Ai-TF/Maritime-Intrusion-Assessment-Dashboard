@@ -277,9 +277,16 @@ async function fetchKmaWarningAlerts() {
       toTmFc: ymd(kstNow()),
     });
     const resultCode = json?.response?.header?.resultCode;
-    if (resultCode && resultCode !== "00") return [];
+    const resultMsg = json?.response?.header?.resultMsg;
+    if (resultCode && resultCode !== "00") {
+      console.warn(`KMA warning skipped: ${resultCode} ${resultMsg ?? ""}`.trim());
+      return [];
+    }
 
-    return publicDataItems(json)
+    const warningItems = publicDataItems(json);
+    console.log(`KMA warning items: ${warningItems.length}`);
+
+    return warningItems
       .filter((item) => item.title)
       .slice(0, 8)
       .map((item, index) => {
@@ -296,7 +303,8 @@ async function fetchKmaWarningAlerts() {
           kmaTimestamp(item.tmFc),
         );
       });
-  } catch {
+  } catch (error) {
+    console.warn(`KMA warning failed: ${error instanceof Error ? error.message : error}`);
     return [];
   }
 }

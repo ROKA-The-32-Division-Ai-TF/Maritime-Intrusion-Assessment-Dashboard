@@ -1,20 +1,21 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-05-13T15:11:34.070Z",
+  "generatedAt": "2026-05-13T15:34:06.985Z",
   "validForSeconds": 1800,
   "sourceMode": "live",
   "sources": [
     "기상청 초단기실황/예보",
     "한국천문연구원 출몰시각",
     "국립해양조사원 조석예보",
-    "에어코리아"
+    "에어코리아",
+    "기상청 기상특보"
   ],
   "operationUpdates": [
     {
       "id": "coastal-seosan",
       "type": "coastal",
       "name": "서산 권역 · 대산 연안",
-      "datetime": "2026.05.14 00:11 기준",
+      "datetime": "2026.05.14 00:34 기준",
       "coastal": {
         "temperatureC": 12,
         "humidityPercent": 100,
@@ -25,7 +26,7 @@
         "visibilityKm": 9,
         "weatherStatus": "맑음",
         "fogLevel": "없음",
-        "currentTime": "00:11",
+        "currentTime": "00:34",
         "waveHeightM": 0.2,
         "nearshoreWaveHeightM": 0.2,
         "offshoreWaveHeightM": 0.7,
@@ -58,7 +59,7 @@
       "id": "coastal-dangjin",
       "type": "coastal",
       "name": "당진 권역 · 장고항 일대",
-      "datetime": "2026.05.14 00:11 기준",
+      "datetime": "2026.05.14 00:34 기준",
       "coastal": {
         "temperatureC": 13.6,
         "humidityPercent": 95,
@@ -69,7 +70,7 @@
         "visibilityKm": 9,
         "weatherStatus": "맑음",
         "fogLevel": "없음",
-        "currentTime": "00:11",
+        "currentTime": "00:34",
         "waveHeightM": 0.2,
         "nearshoreWaveHeightM": 0.2,
         "offshoreWaveHeightM": 0.7,
@@ -103,7 +104,7 @@
       "id": "coastal-taean",
       "type": "coastal",
       "name": "태안 권역 · 안흥항 일대",
-      "datetime": "2026.05.14 00:11 기준",
+      "datetime": "2026.05.14 00:34 기준",
       "coastal": {
         "temperatureC": 12.3,
         "humidityPercent": 95,
@@ -114,7 +115,7 @@
         "visibilityKm": 9,
         "weatherStatus": "흐림",
         "fogLevel": "없음",
-        "currentTime": "00:11",
+        "currentTime": "00:34",
         "waveHeightM": 0.2,
         "nearshoreWaveHeightM": 0.2,
         "offshoreWaveHeightM": 0.7,
@@ -148,7 +149,7 @@
       "id": "coastal-boryeong",
       "type": "coastal",
       "name": "보령 권역 · 대천항 일대",
-      "datetime": "2026.05.14 00:11 기준",
+      "datetime": "2026.05.14 00:34 기준",
       "coastal": {
         "temperatureC": 13,
         "humidityPercent": 94,
@@ -159,7 +160,7 @@
         "visibilityKm": 9,
         "weatherStatus": "흐림",
         "fogLevel": "없음",
-        "currentTime": "00:11",
+        "currentTime": "00:34",
         "waveHeightM": 0.2,
         "nearshoreWaveHeightM": 0.2,
         "offshoreWaveHeightM": 0.7,
@@ -193,7 +194,7 @@
       "id": "ground-land-seosan",
       "type": "ground",
       "name": "서산시 기상 권역",
-      "datetime": "2026.05.14 00:11 기준",
+      "datetime": "2026.05.14 00:34 기준",
       "ground": {
         "temperatureC": 12.9,
         "humidityPercent": 96,
@@ -204,7 +205,7 @@
         "visibilityKm": 9,
         "weatherStatus": "맑음",
         "fogLevel": "없음",
-        "currentTime": "00:11",
+        "currentTime": "00:34",
         "apparentTemperatureC": 15.9,
         "wbgtC": 14.1,
         "surfaceWindMs": 1.2,
@@ -238,7 +239,7 @@
       "id": "ground-land-dangjin",
       "type": "ground",
       "name": "당진시 기상 권역",
-      "datetime": "2026.05.14 00:11 기준",
+      "datetime": "2026.05.14 00:34 기준",
       "ground": {
         "temperatureC": 13.1,
         "humidityPercent": 94,
@@ -249,7 +250,7 @@
         "visibilityKm": 9,
         "weatherStatus": "맑음",
         "fogLevel": "없음",
-        "currentTime": "00:11",
+        "currentTime": "00:34",
         "apparentTemperatureC": 16.8,
         "wbgtC": 14.1,
         "surfaceWindMs": 0.1,
@@ -283,7 +284,7 @@
       "id": "ground-land-taean",
       "type": "ground",
       "name": "태안군 기상 권역",
-      "datetime": "2026.05.14 00:11 기준",
+      "datetime": "2026.05.14 00:34 기준",
       "ground": {
         "temperatureC": 12.3,
         "humidityPercent": 95,
@@ -294,7 +295,7 @@
         "visibilityKm": 9,
         "weatherStatus": "흐림",
         "fogLevel": "없음",
-        "currentTime": "00:11",
+        "currentTime": "00:34",
         "apparentTemperatureC": 15.1,
         "wbgtC": 13.6,
         "surfaceWindMs": 1.5,
@@ -328,7 +329,7 @@
       "id": "ground-land-boryeong",
       "type": "ground",
       "name": "보령시 기상 권역",
-      "datetime": "2026.05.14 00:11 기준",
+      "datetime": "2026.05.14 00:34 기준",
       "ground": {
         "temperatureC": 13,
         "humidityPercent": 94,
@@ -339,7 +340,7 @@
         "visibilityKm": 9,
         "weatherStatus": "흐림",
         "fogLevel": "없음",
-        "currentTime": "00:11",
+        "currentTime": "00:34",
         "apparentTemperatureC": 16.3,
         "wbgtC": 14.1,
         "surfaceWindMs": 0.6,
@@ -373,7 +374,7 @@
       "id": "air-A-A",
       "type": "air",
       "name": "A권역 · 서해 연안 공역",
-      "datetime": "2026.05.14 00:11 기준",
+      "datetime": "2026.05.14 00:34 기준",
       "air": {
         "temperatureC": 12.9,
         "precipitationProbability": 15,
@@ -434,7 +435,7 @@
       "id": "air-A-B",
       "type": "air",
       "name": "B권역 · 내륙 회랑",
-      "datetime": "2026.05.14 00:11 기준",
+      "datetime": "2026.05.14 00:34 기준",
       "air": {
         "temperatureC": 13.1,
         "precipitationProbability": 15,
@@ -495,7 +496,7 @@
       "id": "air-A-C",
       "type": "air",
       "name": "C권역 · 도심 관측권",
-      "datetime": "2026.05.14 00:11 기준",
+      "datetime": "2026.05.14 00:34 기준",
       "air": {
         "temperatureC": 17.2,
         "precipitationProbability": 15,
@@ -556,7 +557,7 @@
       "id": "air-A-D",
       "type": "air",
       "name": "D권역 · 산악 난류권",
-      "datetime": "2026.05.14 00:11 기준",
+      "datetime": "2026.05.14 00:34 기준",
       "air": {
         "temperatureC": 14.7,
         "precipitationProbability": 15,
@@ -614,5 +615,78 @@
       }
     }
   ],
-  "alerts": []
+  "alerts": [
+    {
+      "id": "kma-warning-202605131000-62",
+      "type": "system",
+      "level": "watch",
+      "title": "기상특보",
+      "message": "[특보] 제05-62호 : 2026.05.13.10:00 / 건조주의보 해제 (*)",
+      "source": "기상청 기상특보",
+      "timestamp": "2026-05-13T01:00:00.000Z"
+    },
+    {
+      "id": "kma-warning-202605131000-10",
+      "type": "system",
+      "level": "watch",
+      "title": "기상특보",
+      "message": "[특보] 제05-10호 : 2026.05.13.10:00 / 건조주의보 해제 (*)",
+      "source": "기상청 기상특보",
+      "timestamp": "2026-05-13T01:00:00.000Z"
+    },
+    {
+      "id": "kma-warning-202605121300-11",
+      "type": "system",
+      "level": "watch",
+      "title": "기상특보",
+      "message": "[특보] 제05-11호 : 2026.05.12.13:00 / 호우주의보 해제 (*)",
+      "source": "기상청 기상특보",
+      "timestamp": "2026-05-12T04:00:00.000Z"
+    },
+    {
+      "id": "kma-warning-202605121300-61",
+      "type": "system",
+      "level": "watch",
+      "title": "기상특보",
+      "message": "[특보] 제05-61호 : 2026.05.12.13:00 / 호우주의보 해제 (*)",
+      "source": "기상청 기상특보",
+      "timestamp": "2026-05-12T04:00:00.000Z"
+    },
+    {
+      "id": "kma-warning-202605121250-23",
+      "type": "system",
+      "level": "warning",
+      "title": "기상특보",
+      "message": "[특보] 제05-23호 : 2026.05.12.12:50 / 호우경보·호우주의보 해제 (*)",
+      "source": "기상청 기상특보",
+      "timestamp": "2026-05-12T03:50:00.000Z"
+    },
+    {
+      "id": "kma-warning-202605121250-60",
+      "type": "system",
+      "level": "warning",
+      "title": "기상특보",
+      "message": "[특보] 제05-60호 : 2026.05.12.12:50 / 호우경보·호우주의보 해제 (*)",
+      "source": "기상청 기상특보",
+      "timestamp": "2026-05-12T03:50:00.000Z"
+    },
+    {
+      "id": "kma-warning-202605121200-10",
+      "type": "system",
+      "level": "watch",
+      "title": "기상특보",
+      "message": "[특보] 제05-10호 : 2026.05.12.12:00 / 호우주의보 변경 (*)",
+      "source": "기상청 기상특보",
+      "timestamp": "2026-05-12T03:00:00.000Z"
+    },
+    {
+      "id": "kma-warning-202605121200-59",
+      "type": "system",
+      "level": "watch",
+      "title": "기상특보",
+      "message": "[특보] 제05-59호 : 2026.05.12.12:00 / 호우주의보 변경 (*)",
+      "source": "기상청 기상특보",
+      "timestamp": "2026-05-12T03:00:00.000Z"
+    }
+  ]
 }
