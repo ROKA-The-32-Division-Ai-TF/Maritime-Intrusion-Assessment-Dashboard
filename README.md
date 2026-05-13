@@ -49,6 +49,15 @@
 
 현재 스크립트는 `WEATHER_CACHE_SOURCE_URL`이 있으면 준비된 JSON을 가져오고, 없으면 공개 가능한 fallback 캐시를 생성합니다. 실제 기상청·해양·천문·대기질·산불 API를 붙일 때도 프론트엔드 코드에는 키를 넣지 않습니다.
 
+현재 직접 호출하도록 준비된 API는 다음과 같습니다.
+
+- 기상청 단기예보 조회서비스 초단기실황/초단기예보: 기온, 강수량, 습도, 풍향, 풍속, 날씨 상태
+- 한국환경공단 에어코리아 측정소별 실시간 측정정보: PM10, PM2.5 등급
+- 한국천문연구원 출몰시각: 일출, 일몰, 월출, 월몰, BMNT, EENT 후보
+- 국립해양조사원 조석예보: 관측소 코드가 설정된 항구의 만조, 간조
+
+해양 파고/수온은 현재 기상청 초단기 풍속·강수 기반 추정값으로 캐시에 반영하며, 기상청 해양관측 또는 해양부이 API 키와 지점코드가 확보되면 동일한 캐시 구조에 실측값으로 교체할 수 있습니다.
+
 ## 정적 운용 원칙
 
 이 프로젝트는 프론트엔드 단독 실행을 기준으로 합니다.
@@ -102,7 +111,7 @@ NEXT_PUBLIC_BASE_PATH=/Maritime-Intrusion-Assessment-Dashboard npm run build
 3. 정적 사이트 빌드
 4. GitHub Pages 배포
 
-Actions Secrets에 `WEATHER_CACHE_SOURCE_URL`, `WEATHER_CACHE_SOURCE_TOKEN`, `KMA_APIHUB_AUTH_KEY`, `KMA_SERVICE_KEY`, `KHOA_SERVICE_KEY`, `KASI_SERVICE_KEY`, `AIRKOREA_SERVICE_KEY`, `FOREST_SERVICE_KEY` 등을 넣어 확장할 수 있습니다.
+Actions Secrets에 `PUBLIC_DATA_SERVICE_KEY`, `KMA_SERVICE_KEY`, `KHOA_SERVICE_KEY`, `KASI_SERVICE_KEY`, `AIRKOREA_SERVICE_KEY`, `KHOA_TIDE_OBS_CODE_SEOSAN`, `KHOA_TIDE_OBS_CODE_DANGJIN`, `KHOA_TIDE_OBS_CODE_TAEAN`, `KHOA_TIDE_OBS_CODE_BORYEONG` 등을 넣으면 실제 캐시 갱신에 사용됩니다. `WEATHER_CACHE_SOURCE_URL`을 넣으면 내부 변환 서버가 만든 JSON을 우선 사용합니다.
 
 ## 보안 주의
 

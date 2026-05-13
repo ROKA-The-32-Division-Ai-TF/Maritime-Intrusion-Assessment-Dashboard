@@ -38,12 +38,17 @@ jobs:
         env:
           WEATHER_CACHE_SOURCE_URL: ${{ secrets.WEATHER_CACHE_SOURCE_URL }}
           WEATHER_CACHE_SOURCE_TOKEN: ${{ secrets.WEATHER_CACHE_SOURCE_TOKEN }}
+          PUBLIC_DATA_SERVICE_KEY: ${{ secrets.PUBLIC_DATA_SERVICE_KEY }}
           KMA_APIHUB_AUTH_KEY: ${{ secrets.KMA_APIHUB_AUTH_KEY }}
           KMA_SERVICE_KEY: ${{ secrets.KMA_SERVICE_KEY }}
           KHOA_SERVICE_KEY: ${{ secrets.KHOA_SERVICE_KEY }}
           KASI_SERVICE_KEY: ${{ secrets.KASI_SERVICE_KEY }}
           AIRKOREA_SERVICE_KEY: ${{ secrets.AIRKOREA_SERVICE_KEY }}
           FOREST_SERVICE_KEY: ${{ secrets.FOREST_SERVICE_KEY }}
+          KHOA_TIDE_OBS_CODE_SEOSAN: ${{ secrets.KHOA_TIDE_OBS_CODE_SEOSAN }}
+          KHOA_TIDE_OBS_CODE_DANGJIN: ${{ secrets.KHOA_TIDE_OBS_CODE_DANGJIN }}
+          KHOA_TIDE_OBS_CODE_TAEAN: ${{ secrets.KHOA_TIDE_OBS_CODE_TAEAN }}
+          KHOA_TIDE_OBS_CODE_BORYEONG: ${{ secrets.KHOA_TIDE_OBS_CODE_BORYEONG }}
 
       - name: Build static export
         run: npm run build

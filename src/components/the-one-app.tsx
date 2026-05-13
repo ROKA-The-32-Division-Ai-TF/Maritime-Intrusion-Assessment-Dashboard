@@ -74,6 +74,7 @@ type LiveAlert = {
 type WeatherCachePayload = {
   generatedAt?: string;
   alerts?: LiveAlert[];
+  operationUpdates?: Partial<TheOneOperation>[];
 };
 
 const KMA_WEATHER_MAP_URL = "https://www.weather.go.kr/wgis-nuri/html/map.html#";
@@ -385,6 +386,40 @@ function hydrateStoredOperation(operation: Partial<TheOneOperation>): TheOneOper
   };
 }
 
+function mergeOperationUpdate(operation: TheOneOperation, update: Partial<TheOneOperation>): TheOneOperation {
+  return {
+    ...operation,
+    ...update,
+    coastal: operation.coastal || update.coastal ? { ...operation.coastal, ...update.coastal } as TheOneOperation["coastal"] : undefined,
+    coastalEnvironment:
+      operation.coastalEnvironment || update.coastalEnvironment
+        ? { ...operation.coastalEnvironment, ...update.coastalEnvironment } as TheOneOperation["coastalEnvironment"]
+        : undefined,
+    ground: operation.ground || update.ground ? { ...operation.ground, ...update.ground } as TheOneOperation["ground"] : undefined,
+    groundEnvironment:
+      operation.groundEnvironment || update.groundEnvironment
+        ? { ...operation.groundEnvironment, ...update.groundEnvironment } as TheOneOperation["groundEnvironment"]
+        : undefined,
+    air: operation.air || update.air ? { ...operation.air, ...update.air } as TheOneOperation["air"] : undefined,
+    aviationEnvironment:
+      operation.aviationEnvironment || update.aviationEnvironment
+        ? { ...operation.aviationEnvironment, ...update.aviationEnvironment } as TheOneOperation["aviationEnvironment"]
+        : undefined,
+  };
+}
+
+function applyWeatherCacheUpdates(operations: TheOneOperation[], payload: WeatherCachePayload) {
+  const updates = Array.isArray(payload.operationUpdates) ? payload.operationUpdates : [];
+  if (updates.length === 0) return operations;
+
+  const updateMap = new Map(updates.filter((update) => update.id).map((update) => [update.id, update]));
+
+  return operations.map((operation) => {
+    const update = updateMap.get(operation.id);
+    return update ? mergeOperationUpdate(operation, update) : operation;
+  });
+}
+
 function loadStoredOperations() {
   if (typeof window === "undefined") return defaultOperations;
 
@@ -558,6 +593,34 @@ export function TheOneApp() {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(operations));
     }
   }, [hasLoadedStorage, operations]);
+
+  useEffect(() => {
+    if (!hasLoadedStorage) return;
+
+    let isActive = true;
+
+    async function refreshOperationCache() {
+      try {
+        const response = await fetch(`${BASE_PATH}/data/weather-cache.json?ts=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) return;
+
+        const payload = (await response.json()) as WeatherCachePayload;
+        if (!isActive) return;
+
+        setOperations((current) => applyWeatherCacheUpdates(current, payload));
+      } catch {
+        // 캐시 호출 실패 시 기존 화면 데이터를 유지합니다.
+      }
+    }
+
+    refreshOperationCache();
+    const timer = window.setInterval(refreshOperationCache, 60_000);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(timer);
+    };
+  }, [hasLoadedStorage]);
 
   const activeOperations = useMemo(
     () => operations.filter((operation) => operation.type === activeType),

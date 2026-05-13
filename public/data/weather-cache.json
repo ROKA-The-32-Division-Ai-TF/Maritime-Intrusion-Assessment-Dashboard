@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-05-13T13:18:16.552Z",
+  "generatedAt": "2026-05-13T13:56:13.226Z",
   "validForSeconds": 1800,
   "sourceMode": "fallback",
   "sources": [
@@ -11,33 +11,34 @@
     "산림청 산불위험",
     "항공기상 관측 후보"
   ],
+  "operationUpdates": [],
   "alerts": [
     {
       "id": "coastal-cache-watch",
       "type": "coastal",
       "level": "watch",
-      "title": "해상 캐시 갱신",
-      "message": "파고, 조석, 시정, 해양기상 지도 확인이 가능한 최신 캐시 구조가 준비되었습니다.",
+      "title": "해상 캐시 대기",
+      "message": "공공 API 키가 설정되면 파고, 조석, 시정 자료가 자동 반영됩니다.",
       "source": "GitHub Actions",
-      "timestamp": "2026-05-13T13:18:16.553Z"
+      "timestamp": "2026-05-13T13:56:13.227Z"
     },
     {
       "id": "ground-cache-watch",
       "type": "ground",
       "level": "watch",
-      "title": "온열·대기 지표 갱신",
-      "message": "온열지수, 불쾌지수, 통합대기환경지수, 산불위험지수 캐시 구조가 준비되었습니다.",
+      "title": "육상 캐시 대기",
+      "message": "공공 API 키가 설정되면 온열지수, 대기질, 산불위험 자료가 자동 반영됩니다.",
       "source": "GitHub Actions",
-      "timestamp": "2026-05-13T13:18:16.553Z"
+      "timestamp": "2026-05-13T13:56:13.227Z"
     },
     {
       "id": "air-cache-watch",
       "type": "air",
       "level": "watch",
-      "title": "드론 기상 감시",
-      "message": "저고도 풍속, 돌풍, 시정, 낙뢰 위험을 드론 운용 기준으로 확인합니다.",
+      "title": "드론 기상 캐시 대기",
+      "message": "공공 API 키가 설정되면 저고도 풍속, 돌풍, 시정 자료가 자동 반영됩니다.",
       "source": "GitHub Actions",
-      "timestamp": "2026-05-13T13:18:16.553Z"
+      "timestamp": "2026-05-13T13:56:13.227Z"
     },
     {
       "id": "system-cache-ready",
@@ -46,7 +47,7 @@
       "title": "정적 배포 연동",
       "message": "운영 API 키는 GitHub Actions 또는 내부 변환 서버에서만 사용하고, 화면은 JSON 캐시만 읽습니다.",
       "source": "백룡 데이터 허브",
-      "timestamp": "2026-05-13T13:18:16.553Z"
+      "timestamp": "2026-05-13T13:56:13.227Z"
     }
   ]
 }
