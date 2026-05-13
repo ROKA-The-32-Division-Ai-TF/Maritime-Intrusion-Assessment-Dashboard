@@ -283,10 +283,7 @@ async function fetchKmaWarningAlerts() {
       return [];
     }
 
-    const warningItems = publicDataItems(json);
-    console.log(`KMA warning items: ${warningItems.length}`);
-
-    return warningItems
+    return publicDataItems(json)
       .filter((item) => item.title)
       .slice(0, 8)
       .map((item, index) => {
