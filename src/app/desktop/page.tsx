@@ -1,5 +1,5 @@
-import { StaticDashboard } from "@/components/static-dashboard";
+import { DesktopCommandApp } from "@/components/desktop-command-app";
 
 export default function DesktopPage() {
-  return <StaticDashboard />;
+  return <DesktopCommandApp />;
 }

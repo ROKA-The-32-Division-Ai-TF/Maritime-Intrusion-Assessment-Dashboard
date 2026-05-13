@@ -10,6 +10,7 @@ const KMA_WARNING_URL = "http://apis.data.go.kr/1360000/WthrWrnInfoService/getWt
 const AIRKOREA_URL = "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty";
 const KASI_RISE_SET_URL = "https://apis.data.go.kr/B090041/openapi/service/RiseSetInfoService/getAreaRiseSetInfo";
 const KHOA_TIDE_URL = "https://khoa.go.kr/oceandata/odmiapi/GetTideFcstHghLwApiService.do";
+const DEFAULT_DEPLOYED_CACHE_URL = "https://roka-the-32-division-ai-tf.github.io/Maritime-Intrusion-Assessment-Dashboard/data/weather-cache.json";
 
 const operationTargets = [
   { id: "coastal-seosan", type: "coastal", name: "서산 권역 · 대산 연안", lat: 37.005, lon: 126.352, location: "서산", airStation: "대산", tideObsCode: "DT_0017", tideEnv: "KHOA_TIDE_OBS_CODE_SEOSAN" },
@@ -211,6 +212,22 @@ async function loadPreparedFeed() {
   }
 
   return response.json();
+}
+
+async function loadExistingCache() {
+  const existingUrl = env("WEATHER_CACHE_EXISTING_URL") || DEFAULT_DEPLOYED_CACHE_URL;
+
+  try {
+    const response = await fetch(`${existingUrl}?ts=${Date.now()}`, {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+    });
+
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
 }
 
 async function fetchKmaNowForecast(target) {
@@ -546,7 +563,7 @@ function fallbackPayload() {
   return {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
-    validForSeconds: 1800,
+    validForSeconds: 43200,
     sourceMode: "fallback",
     sources: [
       "기상청 API허브",
@@ -597,7 +614,7 @@ async function livePayload() {
   return {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
-    validForSeconds: 1800,
+    validForSeconds: 43200,
     sourceMode: "live",
     sources: [...new Set(sources)],
     operationUpdates: updates,
@@ -605,11 +622,43 @@ async function livePayload() {
   };
 }
 
+async function alertOnlyPayload() {
+  const [current, officialAlerts] = await Promise.all([
+    loadExistingCache(),
+    fetchKmaWarningAlerts(),
+  ]);
+  const base = current ?? fallbackPayload();
+  const updates = Array.isArray(base.operationUpdates) ? base.operationUpdates : [];
+  const nextSources = new Set(Array.isArray(base.sources) ? base.sources : []);
+  const canFetchWarnings = Boolean(apiKey("KMA_WARNING_SERVICE_KEY") || apiKey("KMA_SERVICE_KEY") || apiKey("PUBLIC_DATA_SERVICE_KEY"));
+
+  if (officialAlerts.length > 0) nextSources.add("기상청 기상특보");
+
+  return {
+    ...base,
+    schemaVersion: base.schemaVersion ?? 1,
+    generatedAt: new Date().toISOString(),
+    validForSeconds: typeof base.validForSeconds === "number" && base.validForSeconds > 1800 ? base.validForSeconds : 43200,
+    sourceMode: officialAlerts.length > 0 ? "live" : base.sourceMode ?? "fallback",
+    sources: [...nextSources],
+    operationUpdates: updates,
+    alerts: officialAlerts.length > 0 || canFetchWarnings
+      ? liveAlerts(updates, officialAlerts)
+      : Array.isArray(base.alerts)
+        ? base.alerts
+        : liveAlerts(updates, []),
+  };
+}
+
 async function main() {
   let payload;
 
   try {
-    payload = (await loadPreparedFeed()) ?? await livePayload();
+    if (env("WEATHER_CACHE_REFRESH_SCOPE") === "alerts") {
+      payload = await alertOnlyPayload();
+    } else {
+      payload = (await loadPreparedFeed()) ?? await livePayload();
+    }
   } catch (error) {
     console.warn(error instanceof Error ? error.message : error);
     payload = fallbackPayload();

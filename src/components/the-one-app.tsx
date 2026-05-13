@@ -461,7 +461,7 @@ function fallbackLiveAlerts(activeType: OperationType): LiveAlert[] {
         level: "watch",
         title: "해상 변동 감시",
         message: "파고·조석·시정 변동이 큰 항구는 실시간 탭에서 윈디와 기상청 지도를 함께 확인하세요.",
-        source: "해양기상 캐시",
+        source: "해양기상",
         timestamp,
       },
       ...common,
@@ -476,7 +476,7 @@ function fallbackLiveAlerts(activeType: OperationType): LiveAlert[] {
         level: "watch",
         title: "온열지수 확인",
         message: "고온·고습 조건에서는 온열지수와 체감온도 카드를 우선 확인하세요.",
-        source: "육상기상 캐시",
+        source: "육상기상",
         timestamp,
       },
       ...common,
@@ -490,7 +490,7 @@ function fallbackLiveAlerts(activeType: OperationType): LiveAlert[] {
       level: "watch",
       title: "드론 운용 기상",
       message: "돌풍·저시정·낙뢰 변동은 드론 운용 제한 요소로 실시간 확인이 필요합니다.",
-      source: "공중기상 캐시",
+      source: "공중기상",
       timestamp,
     },
     ...common,
@@ -768,18 +768,28 @@ function LiveAlertTicker({ activeType }: { activeType: OperationType }) {
   const [isOpen, setIsOpen] = useState(false);
   const { alerts, history } = useLiveAlerts(activeType);
   const visibleAlerts = alerts.length > 0 ? alerts : fallbackLiveAlerts(activeType);
-  const tickerText = visibleAlerts.map((alert) => `${alert.title} · ${alert.message}`).join("     ");
+  const leadAlert = visibleAlerts[0];
 
   return (
     <section className="alert-ticker" aria-live="polite">
       <div className="alert-ticker-strip">
-        <span className={cx("alert-dot", `is-${visibleAlerts[0]?.level ?? "info"}`)} />
-        <div className="alert-marquee">
-          <p>{tickerText}</p>
+        <span className={cx("alert-dot", `is-${leadAlert?.level ?? "info"}`)} />
+        <div className="alert-ticker-summary">
+          <strong>{leadAlert?.title ?? "기상특보"}</strong>
+          <em>{visibleAlerts.length}건</em>
         </div>
         <button type="button" onClick={() => setIsOpen((current) => !current)}>
           기록
         </button>
+      </div>
+      <div className="alert-chip-list">
+        {visibleAlerts.slice(0, 3).map((alert) => (
+          <article key={`${alert.id}-chip`} className={cx("alert-chip", `is-${alert.level}`)}>
+            <span>{alert.source}</span>
+            <strong>{alert.title}</strong>
+            <p>{alert.message}</p>
+          </article>
+        ))}
       </div>
       {isOpen && (
         <div className="alert-history-panel">
