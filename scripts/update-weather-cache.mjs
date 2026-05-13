@@ -6,6 +6,7 @@ const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const outputPath = join(rootDir, "public", "data", "weather-cache.json");
 const KMA_NCST_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst";
 const KMA_FCST_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst";
+const KMA_WARNING_URL = "https://apis.data.go.kr/1360000/WthrWrnInfoService/getWthrWrnList";
 const AIRKOREA_URL = "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty";
 const KASI_RISE_SET_URL = "https://apis.data.go.kr/B090041/openapi/service/RiseSetInfoService/getAreaRiseSetInfo";
 const KHOA_TIDE_URL = "https://khoa.go.kr/oceandata/odmiapi/GetTideFcstHghLwApiService.do";
@@ -40,7 +41,7 @@ function apiKey(name) {
   }
 }
 
-function alert(id, type, level, title, message, source) {
+function alert(id, type, level, title, message, source, timestamp = new Date().toISOString()) {
   return {
     id,
     type,
@@ -48,7 +49,7 @@ function alert(id, type, level, title, message, source) {
     title,
     message,
     source,
-    timestamp: new Date().toISOString(),
+    timestamp,
   };
 }
 
@@ -58,6 +59,18 @@ function kstNow(offsetMinutes = 0) {
 
 function ymd(date) {
   return `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, "0")}${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function kmaTimestamp(tmFc) {
+  const value = String(tmFc ?? "");
+  if (value.length < 8) return new Date().toISOString();
+
+  const year = value.slice(0, 4);
+  const month = value.slice(4, 6);
+  const day = value.slice(6, 8);
+  const hour = value.length >= 10 ? value.slice(8, 10) : "00";
+  const minute = value.length >= 12 ? value.slice(10, 12) : "00";
+  return new Date(`${year}-${month}-${day}T${hour}:${minute}:00+09:00`).toISOString();
 }
 
 function hourBaseTime() {
@@ -248,6 +261,44 @@ async function fetchKmaNowForecast(target) {
       currentTime: base.currentTime,
     },
   };
+}
+
+async function fetchKmaWarningAlerts() {
+  const serviceKey = apiKey("KMA_WARNING_SERVICE_KEY") || apiKey("KMA_SERVICE_KEY") || apiKey("PUBLIC_DATA_SERVICE_KEY");
+  if (!serviceKey) return [];
+
+  try {
+    const json = await fetchJson(KMA_WARNING_URL, {
+      ServiceKey: serviceKey,
+      pageNo: 1,
+      numOfRows: 12,
+      dataType: "JSON",
+      fromTmFc: ymd(kstNow(-72 * 60)),
+      toTmFc: ymd(kstNow()),
+    });
+    const resultCode = json?.response?.header?.resultCode;
+    if (resultCode && resultCode !== "00") return [];
+
+    return publicDataItems(json)
+      .filter((item) => item.title)
+      .slice(0, 8)
+      .map((item, index) => {
+        const title = String(item.title);
+        const level = title.includes("경보") || title.includes("태풍") ? "warning" : "watch";
+
+        return alert(
+          `kma-warning-${item.tmFc ?? "latest"}-${item.tmSeq ?? index}`,
+          "system",
+          level,
+          "기상특보",
+          title,
+          "기상청 기상특보",
+          kmaTimestamp(item.tmFc),
+        );
+      });
+  } catch {
+    return [];
+  }
 }
 
 async function fetchAirKorea(target) {
@@ -502,18 +553,13 @@ function fallbackPayload() {
     ],
     operationUpdates: [],
     alerts: [
-      alert("coastal-cache-watch", "coastal", "watch", "해상 캐시 대기", "공공 API 키가 설정되면 파고, 조석, 시정 자료가 자동 반영됩니다.", "GitHub Actions"),
-      alert("ground-cache-watch", "ground", "watch", "육상 캐시 대기", "공공 API 키가 설정되면 온열지수, 대기질, 산불위험 자료가 자동 반영됩니다.", "GitHub Actions"),
-      alert("air-cache-watch", "air", "watch", "드론 기상 캐시 대기", "공공 API 키가 설정되면 저고도 풍속, 돌풍, 시정 자료가 자동 반영됩니다.", "GitHub Actions"),
-      alert("system-cache-ready", "system", "info", "정적 배포 연동", "운영 API 키는 GitHub Actions 또는 내부 변환 서버에서만 사용하고, 화면은 JSON 캐시만 읽습니다.", "백룡 데이터 허브"),
+      alert("weather-warning-pending", "system", "watch", "기상특보 확인", "현재 공식 특보 자료 수신을 준비 중입니다.", "기상청"),
     ],
   };
 }
 
-function liveAlerts(updates, sources) {
-  const alerts = [
-    alert("system-live-cache", "system", "info", "실시간 캐시 갱신", `${updates.length}개 지점 자료를 ${sources.join(" · ") || "공공 API"} 기준으로 갱신했습니다.`, "GitHub Actions"),
-  ];
+function liveAlerts(updates, officialAlerts = []) {
+  const alerts = [...officialAlerts];
 
   updates.forEach((update) => {
     const wind = update.coastal?.windSpeedMs ?? update.ground?.windSpeedMs ?? update.air?.windSpeedMs;
@@ -533,9 +579,13 @@ function liveAlerts(updates, sources) {
 }
 
 async function livePayload() {
-  const results = await Promise.all(operationTargets.map(buildOperationUpdate));
+  const [results, officialAlerts] = await Promise.all([
+    Promise.all(operationTargets.map(buildOperationUpdate)),
+    fetchKmaWarningAlerts(),
+  ]);
   const updates = results.map((result) => result.update).filter(Boolean);
   const sources = [...new Set(results.flatMap((result) => result.sources))];
+  if (officialAlerts.length > 0) sources.push("기상청 기상특보");
 
   if (updates.length === 0) return fallbackPayload();
 
@@ -544,9 +594,9 @@ async function livePayload() {
     generatedAt: new Date().toISOString(),
     validForSeconds: 1800,
     sourceMode: "live",
-    sources,
+    sources: [...new Set(sources)],
     operationUpdates: updates,
-    alerts: liveAlerts(updates, sources),
+    alerts: liveAlerts(updates, officialAlerts),
   };
 }
 

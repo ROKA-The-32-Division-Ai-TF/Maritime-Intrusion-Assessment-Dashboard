@@ -446,9 +446,9 @@ function fallbackLiveAlerts(activeType: OperationType): LiveAlert[] {
       id: `system-${activeType}`,
       type: "system",
       level: "info",
-      title: "정적 캐시 운용",
-      message: "GitHub Actions가 생성한 최신 JSON 캐시를 주기적으로 확인합니다.",
-      source: "백룡 캐시",
+      title: "기상특보 확인",
+      message: "현재 표시할 공식 특보가 없습니다.",
+      source: "기상청",
       timestamp,
     },
   ];
