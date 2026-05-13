@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -230,6 +230,14 @@ async function loadExistingCache() {
   }
 }
 
+async function loadLocalCache() {
+  try {
+    return JSON.parse(await readFile(outputPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 async function fetchKmaNowForecast(target) {
   const serviceKey = apiKey("KMA_SERVICE_KEY") || apiKey("PUBLIC_DATA_SERVICE_KEY");
   if (!serviceKey) return null;
@@ -282,7 +290,7 @@ async function fetchKmaNowForecast(target) {
 
 async function fetchKmaWarningAlerts() {
   const serviceKey = apiKey("KMA_WARNING_SERVICE_KEY") || apiKey("KMA_SERVICE_KEY") || apiKey("PUBLIC_DATA_SERVICE_KEY");
-  if (!serviceKey) return [];
+  if (!serviceKey) return null;
 
   try {
     const json = await fetchJson(KMA_WARNING_URL, {
@@ -297,7 +305,7 @@ async function fetchKmaWarningAlerts() {
     const resultMsg = json?.response?.header?.resultMsg;
     if (resultCode && resultCode !== "00") {
       console.warn(`KMA warning skipped: ${resultCode} ${resultMsg ?? ""}`.trim());
-      return [];
+      return resultCode === "03" ? [] : null;
     }
 
     return publicDataItems(json)
@@ -319,7 +327,7 @@ async function fetchKmaWarningAlerts() {
       });
   } catch (error) {
     console.warn(`KMA warning failed: ${error instanceof Error ? error.message : error}`);
-    return [];
+    return null;
   }
 }
 
@@ -601,24 +609,47 @@ function liveAlerts(updates, officialAlerts = []) {
 }
 
 async function livePayload() {
-  const [results, officialAlerts] = await Promise.all([
+  const [results, officialAlerts, deployedCache, localCache] = await Promise.all([
     Promise.all(operationTargets.map(buildOperationUpdate)),
     fetchKmaWarningAlerts(),
+    loadExistingCache(),
+    loadLocalCache(),
   ]);
-  const updates = results.map((result) => result.update).filter(Boolean);
-  const sources = [...new Set(results.flatMap((result) => result.sources))];
-  if (officialAlerts.length > 0) sources.push("기상청 기상특보");
+  const liveUpdates = results.map((result) => result.update).filter(Boolean);
+  const existingCandidates = [deployedCache, localCache]
+    .filter(Boolean)
+    .sort((first, second) => (second.operationUpdates?.length ?? 0) - (first.operationUpdates?.length ?? 0));
+  const bestExisting = existingCandidates[0];
+  const existingUpdates = Array.isArray(bestExisting?.operationUpdates) ? bestExisting.operationUpdates : [];
+  const updateMap = new Map(existingUpdates.filter((update) => update.id).map((update) => [update.id, update]));
+
+  liveUpdates.forEach((update) => {
+    if (update.id) updateMap.set(update.id, update);
+  });
+
+  const updates = liveUpdates.length >= Math.min(8, operationTargets.length)
+    ? liveUpdates
+    : [...updateMap.values()];
+  const sourceSet = new Set([
+    ...(Array.isArray(bestExisting?.sources) ? bestExisting.sources : []),
+    ...results.flatMap((result) => result.sources),
+  ]);
+  if (officialAlerts?.length) sourceSet.add("기상청 기상특보");
 
   if (updates.length === 0) return fallbackPayload();
+
+  const alertSeed = officialAlerts === null
+    ? Array.isArray(bestExisting?.alerts) ? bestExisting.alerts : []
+    : officialAlerts;
 
   return {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
     validForSeconds: 43200,
     sourceMode: "live",
-    sources: [...new Set(sources)],
+    sources: [...sourceSet],
     operationUpdates: updates,
-    alerts: liveAlerts(updates, officialAlerts),
+    alerts: liveAlerts(updates, alertSeed),
   };
 }
 
@@ -630,19 +661,18 @@ async function alertOnlyPayload() {
   const base = current ?? fallbackPayload();
   const updates = Array.isArray(base.operationUpdates) ? base.operationUpdates : [];
   const nextSources = new Set(Array.isArray(base.sources) ? base.sources : []);
-  const canFetchWarnings = Boolean(apiKey("KMA_WARNING_SERVICE_KEY") || apiKey("KMA_SERVICE_KEY") || apiKey("PUBLIC_DATA_SERVICE_KEY"));
 
-  if (officialAlerts.length > 0) nextSources.add("기상청 기상특보");
+  if (officialAlerts?.length) nextSources.add("기상청 기상특보");
 
   return {
     ...base,
     schemaVersion: base.schemaVersion ?? 1,
     generatedAt: new Date().toISOString(),
     validForSeconds: typeof base.validForSeconds === "number" && base.validForSeconds > 1800 ? base.validForSeconds : 43200,
-    sourceMode: officialAlerts.length > 0 ? "live" : base.sourceMode ?? "fallback",
+    sourceMode: officialAlerts?.length ? "live" : base.sourceMode ?? "fallback",
     sources: [...nextSources],
     operationUpdates: updates,
-    alerts: officialAlerts.length > 0 || canFetchWarnings
+    alerts: officialAlerts !== null
       ? liveAlerts(updates, officialAlerts)
       : Array.isArray(base.alerts)
         ? base.alerts
