@@ -66,6 +66,12 @@ function currentSpeedFromStatus(status: ZoneEnvironmentData["currentStatus"]) {
   return 1.4;
 }
 
+function tideRangeFromStatus(status: ZoneEnvironmentData["tideStatus"]) {
+  if (status === "만조 전후" || status === "간조 전후") return 6.8;
+  if (status === "만조 접근") return 6.1;
+  return 4.4;
+}
+
 function precipitationFromWeather(status: ZoneEnvironmentData["weatherStatus"]) {
   if (status === "폭우" || status === "악천후") return { probability: 85, amount: 18 };
   if (status === "비" || status === "눈") return { probability: 65, amount: 5 };
@@ -86,18 +92,26 @@ function coastalDataFromEnvironment(data: ZoneEnvironmentData): CoastalData {
     windSpeedMs: data.windSpeedMs,
     sunrise: "05:32",
     sunset: "19:31",
+    bmnt: "04:58",
+    eent: "20:05",
     moonrise: "21:18",
     moonset: "06:42",
     moonlightPercent: data.timeBand === "night" ? 18 : data.timeBand === "evening" ? 34 : 62,
     lowTide: data.tideStatus === "간조 전후" ? "03:18 / 15:42" : "04:05 / 16:18",
     highTide: data.tideStatus === "만조 전후" || data.tideStatus === "만조 접근" ? "09:36 / 22:08" : "10:20 / 23:01",
     tideAge: tideAgeFromStatus(data.tideStatus),
+    tideRangeM: tideRangeFromStatus(data.tideStatus),
     waveHeightM: data.waveHeightM,
+    nearshoreWaveHeightM: data.waveHeightM,
+    offshoreWaveHeightM: Number((data.waveHeightM + (data.waveHeightM >= 1.5 ? 0.7 : 0.45)).toFixed(1)),
     waveDirection: "서남서",
     wavePeriodSec: data.waveHeightM >= 1.5 ? 6.2 : 4.8,
     waterTempC: data.temperatureC - 1,
     currentDirection: data.currentStatus === "접근 유리" ? "남동" : data.currentStatus === "보통" ? "남서" : "북서",
     currentSpeedKt: currentSpeedFromStatus(data.currentStatus),
+    surfaceWindMs: data.windSpeedMs,
+    upperWindSpeedMs: Number((data.windSpeedMs * 1.45 + 1.8).toFixed(1)),
+    upperWindDirection: "서",
     visibilityKm: data.visibilityKm,
     currentTime: timeFromBand(data.timeBand),
   };
@@ -117,6 +131,13 @@ function groundDataFromZone(zone: GroundZone): GroundData {
     terrain: zone.terrain,
     sunrise: "05:28",
     sunset: "19:36",
+    bmnt: "04:54",
+    eent: "20:08",
+    apparentTemperatureC: zone.data.apparentTemperatureC ?? zone.data.temperatureC,
+    wbgtC: zone.data.wbgtC ?? zone.data.temperatureC - 2,
+    surfaceWindMs: zone.data.windSpeedMs,
+    upperWindSpeedMs: Number((zone.data.windSpeedMs * 1.6 + 1.4).toFixed(1)),
+    upperWindDirection: zone.data.windSpeedMs >= 6 ? "서북서" : "남서",
     currentTime: zone.data.weatherAlert === "없음" ? "21:30" : "23:00",
   };
 }
@@ -145,10 +166,10 @@ function airDataFromEnvironment(data: AviationZoneData): AirData {
     humidityPercent: data.humidityPercent,
     dewPointC: data.dewPointC,
     altitudeLayers: [
-      { label: "FL050", windSpeedMs: Math.max(2, data.averageWindSpeedMs - 1), windDirection: "230°", temperatureC: data.temperatureC - 1, turbulence },
-      { label: "FL150", windSpeedMs: data.averageWindSpeedMs + 4, windDirection: "240°", temperatureC: data.temperatureC - 12, turbulence },
-      { label: "FL250", windSpeedMs: data.averageWindSpeedMs + 9, windDirection: "250°", temperatureC: data.temperatureC - 28, turbulence: turbulence === "강" ? "강" : "중" },
-      { label: "FL350", windSpeedMs: data.averageWindSpeedMs + 16, windDirection: "260°", temperatureC: data.temperatureC - 45, turbulence: turbulence === "없음" ? "약" : turbulence },
+      { label: "50m", windSpeedMs: Math.max(2, data.averageWindSpeedMs - 0.6), windDirection: "230°", temperatureC: data.temperatureC - 0.4, turbulence },
+      { label: "100m", windSpeedMs: data.averageWindSpeedMs + 1.2, windDirection: "235°", temperatureC: data.temperatureC - 0.8, turbulence },
+      { label: "150m", windSpeedMs: data.averageWindSpeedMs + 2.4, windDirection: "240°", temperatureC: data.temperatureC - 1.2, turbulence: turbulence === "강" ? "강" : "중" },
+      { label: "300m", windSpeedMs: data.averageWindSpeedMs + 4.5, windDirection: "250°", temperatureC: data.temperatureC - 2.4, turbulence: turbulence === "없음" ? "약" : turbulence },
     ],
   };
 }

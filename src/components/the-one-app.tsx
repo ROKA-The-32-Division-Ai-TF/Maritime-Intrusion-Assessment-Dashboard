@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useEffect, useMemo, useState, type ComponentType, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -37,7 +37,7 @@ import {
 import { allOperations, cloneCatalogOperation, defaultOperations, operationConfigs } from "@/lib/the-one-data";
 
 type AppView = "splash" | "mode" | "dashboard" | "list" | "add" | "detail" | "analysis" | "settings";
-type AnalysisTab = "summary" | "week" | "map";
+type AnalysisTab = "summary" | "live" | "week" | "map";
 type SimpleIcon = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type CatalogGroup = {
   name: string;
@@ -61,6 +61,24 @@ type ObjectiveIndicator = {
   unit: string;
 };
 type RiskToneClass = "very-low" | "low" | "normal" | "high" | "very-high";
+type LiveAlertLevel = "info" | "watch" | "warning";
+type LiveAlert = {
+  id: string;
+  type: OperationType | "system";
+  level: LiveAlertLevel;
+  title: string;
+  message: string;
+  source: string;
+  timestamp: string;
+};
+type WeatherCachePayload = {
+  generatedAt?: string;
+  alerts?: LiveAlert[];
+};
+
+const KMA_WEATHER_MAP_URL = "https://www.weather.go.kr/wgis-nuri/html/map.html#";
+const KMA_MARINE_MAP_URL = "https://marine.kma.go.kr/mmis/?menuId=sig_wh";
+const ALERT_HISTORY_STORAGE_KEY = "baekryong-the-one-alert-history-v1";
 
 const OPERATION_TYPES: OperationType[] = ["coastal", "ground", "air"];
 const STORAGE_KEY = "baekryong-the-one-operations-v4";
@@ -135,19 +153,20 @@ function isMetricChartable(metric: MetricItem) {
 function metricDisplayValue(value: number, unit: string) {
   if (unit === "분") return minutesToClock(value);
   if (unit === "%") return `${Math.round(value)}%`;
+  if (unit === "지수" || unit === "CAI") return `${Math.round(value)}`;
   if (unit === "ft" || unit === "hPa") return `${Math.round(value)}${unit}`;
   if (unit === "℃") return `${Number(value.toFixed(1))}℃`;
   if (["m/s", "km", "m", "kt", "mm", "초"].includes(unit)) return `${Number(value.toFixed(1))}${unit}`;
   return `${Number(value.toFixed(2))}${unit}`;
 }
 
-function clockToMinutes(value: string) {
+function clockToMinutes(value = "00:00") {
   const match = value.match(/(\d{1,2}):(\d{2})/);
   if (!match) return 0;
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
-function clockPairToMinutes(value: string) {
+function clockPairToMinutes(value = "00:00 / 12:00") {
   const matches = [...value.matchAll(/(\d{1,2}):(\d{2})/g)].map((match) => Number(match[1]) * 60 + Number(match[2]));
   if (matches.length >= 2) return [matches[0], matches[1]] as const;
   const first = matches[0] ?? 0;
@@ -170,6 +189,13 @@ function dustIndex(level?: string) {
   if (level === "나쁨") return 125;
   if (level === "보통") return 75;
   return 35;
+}
+
+function heatStressIndex(temperatureC: number, humidityPercent: number, windSpeedMs: number, wbgtC?: number) {
+  const wbgtScore = typeof wbgtC === "number" ? (wbgtC >= 31 ? 92 : wbgtC >= 28 ? 74 : wbgtC >= 25 ? 52 : 22) : 0;
+  const thermalScore = clampIndex(temperatureC * 1.7 + humidityPercent * 0.42 - windSpeedMs * 1.6);
+
+  return Math.max(wbgtScore, thermalScore);
 }
 
 function getObjectiveIndicators(operation: TheOneOperation): ObjectiveIndicator[] {
@@ -196,8 +222,10 @@ function getObjectiveIndicators(operation: TheOneOperation): ObjectiveIndicator[
     const apparentIndex = clampIndex(Math.abs(apparent - 22) * 6);
     const cai = Math.max(dustIndex(env?.pm10Level), dustIndex(env?.pm25Level));
     const fire = clampIndex(data.temperatureC * 1.6 + data.windSpeedMs * 6 - data.humidityPercent * 0.35 + (env?.fireRiskLevel === "높음" ? 20 : env?.fireRiskLevel === "매우높음" ? 32 : 6));
+    const heat = heatStressIndex(data.temperatureC, data.humidityPercent, data.windSpeedMs, data.wbgtC);
 
     return [
+      { label: "온열지수", value: `${heat}`, level: levelFromIndex(heat), tone: toneFromIndex(heat), description: "기온, 습도, 풍속, WBGT를 함께 반영한 온열 부담 지표입니다.", trend: forecastTrend(heat, 14), unit: "지수" },
       { label: "불쾌지수", value: `${discomfort}`, level: discomfort >= 80 ? "매우 높음" : discomfort >= 75 ? "높음" : discomfort >= 68 ? "보통" : "낮음", tone: toneFromIndex(discomfort), description: "기온과 습도를 기반으로 체감 불쾌 수준을 표시합니다.", trend: forecastTrend(discomfort, 10), unit: "지수" },
       { label: "체감온도", value: `${apparent}℃`, level: levelFromIndex(apparentIndex), tone: toneFromIndex(apparentIndex), description: "기온, 습도, 풍속을 반영한 실제 체감 온도입니다.", trend: forecastTrend(apparent, 5, -30, 45), unit: "℃" },
       { label: "통합대기환경지수", value: `${cai}`, level: cai >= 150 ? "매우나쁨" : cai >= 100 ? "나쁨" : cai >= 50 ? "보통" : "좋음", tone: cai >= 150 ? "very-high" : cai >= 100 ? "high" : cai >= 50 ? "normal" : "low", description: "미세먼지와 초미세먼지 등 대기질 상태를 종합합니다.", trend: forecastTrend(cai, 22, 0, 200), unit: "CAI" },
@@ -213,16 +241,48 @@ function getObjectiveIndicators(operation: TheOneOperation): ObjectiveIndicator[
     const dewSpread = Math.abs(data.temperatureC - data.dewPointC);
     const icing = clampIndex(data.temperatureC <= 2 && data.humidityPercent >= 75 ? 78 + Math.max(0, 3 - dewSpread) * 5 : data.temperatureC <= 5 && data.humidityPercent >= 70 ? 48 : 12);
     const lightning = clampIndex(env?.lightningRisk === "발생" || env?.thunderstormRisk === "발생" ? 88 : env?.lightningRisk === "가능" || env?.thunderstormRisk === "가능" ? 72 : data.precipitationProbability >= 70 ? 55 : 18);
+    const droneOperation = clampIndex(data.windSpeedMs * 5 + data.gustSpeedMs * 3 + Math.max(0, 5 - data.visibilityKm) * 8 + (data.precipitationMm > 0 ? 16 : 0));
 
     return [
+      { label: "드론운용지수", value: `${droneOperation}`, level: levelFromIndex(droneOperation), tone: toneFromIndex(droneOperation), description: "저고도 드론 운용 기준으로 풍속, 돌풍, 강수, 시정을 함께 봅니다.", trend: forecastTrend(droneOperation, 16), unit: "지수" },
       { label: "저시정 위험도", value: `${lowVis}`, level: levelFromIndex(lowVis), tone: toneFromIndex(lowVis), description: "시정거리를 기준으로 항공 시야 제한 수준을 표시합니다.", trend: forecastTrend(lowVis, 18), unit: "지수" },
-      { label: "난류강도지수", value: `${turbulence}`, level: levelFromIndex(turbulence), tone: toneFromIndex(turbulence), description: "난류 등급과 돌풍을 기준으로 항공 안정성을 표시합니다.", trend: forecastTrend(turbulence, 16), unit: "지수" },
+      { label: "난류·돌풍지수", value: `${turbulence}`, level: levelFromIndex(turbulence), tone: toneFromIndex(turbulence), description: "저고도 난류와 돌풍을 기준으로 드론 안정성을 표시합니다.", trend: forecastTrend(turbulence, 16), unit: "지수" },
       { label: "착빙지수", value: `${icing}`, level: levelFromIndex(icing), tone: toneFromIndex(icing), description: "온도, 습도, 이슬점 차를 기준으로 결빙 가능성을 표시합니다.", trend: forecastTrend(icing, 13), unit: "지수" },
       { label: "낙뢰위험도", value: `${lightning}`, level: levelFromIndex(lightning), tone: toneFromIndex(lightning), description: "낙뢰 또는 뇌우 가능성을 기준으로 즉시 위험성을 표시합니다.", trend: forecastTrend(lightning, 18), unit: "지수" },
     ];
   }
 
   return [];
+}
+
+function objectiveIndicatorIcon(indicator: ObjectiveIndicator, type: OperationType): SimpleIcon {
+  if (type === "coastal") {
+    if (indicator.label.includes("풍랑")) return Gauge;
+    if (indicator.label.includes("해무")) return Eye;
+    return Waves;
+  }
+
+  if (type === "ground") {
+    if (indicator.label.includes("대기")) return Cloud;
+    if (indicator.label.includes("산불")) return Zap;
+    return Thermometer;
+  }
+
+  if (indicator.label.includes("저시정")) return Eye;
+  if (indicator.label.includes("낙뢰")) return Zap;
+  if (indicator.label.includes("착빙")) return Cloud;
+  return Activity;
+}
+
+function objectiveMetricCards(operation: TheOneOperation): MetricItem[] {
+  return getObjectiveIndicators(operation).map((indicator) => ({
+    icon: objectiveIndicatorIcon(indicator, operation.type),
+    label: indicator.label,
+    value: indicator.value,
+    helper: indicator.level,
+    unit: indicator.unit,
+    trend: indicator.trend,
+  }));
 }
 
 function getMetricCards(operation: TheOneOperation): MetricItem[] {
@@ -234,22 +294,28 @@ function getMetricCards(operation: TheOneOperation): MetricItem[] {
       { icon: Gauge, label: "기상특보", value: data.weatherAlert, helper: data.weatherAlert === "없음" ? "특보 없음" : "주의 필요", unit: "단계", trend: trend(data.weatherAlert === "없음" ? 1 : 3, 0.5) },
       { icon: Thermometer, label: "기온", value: `${data.temperatureC}℃`, helper: "해상환경", unit: "℃", trend: metricTrend(data.temperatureC, 1.6) },
       { icon: CloudRain, label: "강수확률", value: `${data.precipitationProbability}%`, helper: `${data.precipitationMm}mm`, unit: "%", trend: metricTrend(data.precipitationProbability, 14) },
-      { icon: Wind, label: "풍속", value: `${data.windSpeedMs}m/s`, helper: data.windDirection, unit: "m/s", trend: metricTrend(data.windSpeedMs, 1.1) },
-      { icon: Waves, label: "파고", value: `${data.waveHeightM}m`, helper: `${data.wavePeriodSec}초`, unit: "m", trend: metricTrend(data.waveHeightM, 0.35) },
+      { icon: Wind, label: "지상풍", value: `${data.surfaceWindMs}m/s`, helper: data.windDirection, unit: "m/s", trend: metricTrend(data.surfaceWindMs, 1.1) },
+      { icon: Wind, label: "상층풍", value: `${data.upperWindSpeedMs}m/s`, helper: data.upperWindDirection, unit: "m/s", trend: metricTrend(data.upperWindSpeedMs, 1.8) },
+      { icon: Waves, label: "앞바다 파고", value: `${data.nearshoreWaveHeightM}m`, helper: `${data.wavePeriodSec}초`, unit: "m", trend: metricTrend(data.nearshoreWaveHeightM, 0.35) },
+      { icon: Waves, label: "먼바다 파고", value: `${data.offshoreWaveHeightM}m`, helper: data.waveDirection, unit: "m", trend: metricTrend(data.offshoreWaveHeightM, 0.42) },
       { icon: Activity, label: "조류속도", value: `${data.currentSpeedKt}kt`, helper: data.currentDirection, unit: "kt", trend: metricTrend(data.currentSpeedKt, 0.22) },
       { icon: Activity, label: "창조류", value: data.currentDirection, helper: `${data.currentSpeedKt}kt`, unit: "kt", trend: metricTrend(data.currentSpeedKt + 0.15, 0.2) },
       { icon: Activity, label: "낙조류", value: "반전 예상", helper: `${Math.max(0.1, data.currentSpeedKt - 0.1).toFixed(1)}kt`, unit: "kt", trend: metricTrend(Math.max(0.1, data.currentSpeedKt - 0.1), 0.18) },
       { icon: Moon, label: "월광", value: `${data.moonlightPercent}%`, helper: "야간 식별", unit: "%", trend: metricTrend(data.moonlightPercent, 9) },
       { icon: Eye, label: "가시거리", value: `${data.visibilityKm}km`, helper: "식별조건", unit: "km", trend: metricTrend(data.visibilityKm, 1.3) },
       { icon: Gauge, label: "물때", value: data.tideAge, helper: `만조 ${data.highTide}`, unit: "단계", trend: metricTrend(Number.parseInt(data.tideAge, 10) || 4, 1.2) },
-      { icon: Thermometer, label: "수온", value: `${data.waterTempC}℃`, helper: "해수면", unit: "℃", trend: metricTrend(data.waterTempC, 0.8) },
+      { icon: Gauge, label: "물매", value: `${data.tideRangeM}m`, helper: "조차", unit: "m", trend: metricTrend(data.tideRangeM, 0.6) },
+      { icon: Thermometer, label: "해수온도", value: `${data.waterTempC}℃`, helper: "해수면", unit: "℃", trend: metricTrend(data.waterTempC, 0.8) },
       { icon: Waves, label: "파주기", value: `${data.wavePeriodSec}초`, helper: data.waveDirection, unit: "초", trend: metricTrend(data.wavePeriodSec, 0.8) },
       { icon: Gauge, label: "일출", value: data.sunrise, helper: "천문", unit: "분", trend: weeklyTimeValues(clockToMinutes(data.sunrise)) },
       { icon: Gauge, label: "일몰", value: data.sunset, helper: "천문", unit: "분", trend: weeklyTimeValues(clockToMinutes(data.sunset)) },
+      { icon: Gauge, label: "BMNT", value: data.bmnt, helper: "아침박명", unit: "분", trend: weeklyTimeValues(clockToMinutes(data.bmnt)) },
+      { icon: Gauge, label: "EENT", value: data.eent, helper: "저녁박명", unit: "분", trend: weeklyTimeValues(clockToMinutes(data.eent)) },
       { icon: Moon, label: "월출", value: data.moonrise, helper: "천문", unit: "분", trend: weeklyTimeValues(clockToMinutes(data.moonrise), 16) },
       { icon: Moon, label: "월몰", value: data.moonset, helper: "천문", unit: "분", trend: weeklyTimeValues(clockToMinutes(data.moonset), 16) },
       { icon: Gauge, label: "간조", value: data.lowTide, helper: "1·2차", unit: "분", trend: weeklyTimeValues(clockPairToMinutes(data.lowTide)[0], 12) },
       { icon: Gauge, label: "만조", value: data.highTide, helper: "1·2차", unit: "분", trend: weeklyTimeValues(clockPairToMinutes(data.highTide)[0], 12) },
+      ...objectiveMetricCards(operation),
     ];
   }
 
@@ -263,13 +329,17 @@ function getMetricCards(operation: TheOneOperation): MetricItem[] {
       { icon: Activity, label: "습도", value: `${data.humidityPercent}%`, helper: "체감영향", unit: "%", trend: metricTrend(data.humidityPercent, 8) },
       { icon: CloudRain, label: "강수확률", value: `${data.precipitationProbability}%`, helper: `${data.precipitationMm}mm`, unit: "%", trend: metricTrend(data.precipitationProbability, 16) },
       { icon: CloudRain, label: "강수량", value: `${data.precipitationMm}mm`, helper: "누적", unit: "mm", trend: metricTrend(data.precipitationMm, 4) },
-      { icon: Wind, label: "풍속", value: `${data.windSpeedMs}m/s`, helper: data.windDirection, unit: "m/s", trend: metricTrend(data.windSpeedMs, 1.4) },
+      { icon: Wind, label: "지상풍", value: `${data.surfaceWindMs}m/s`, helper: data.windDirection, unit: "m/s", trend: metricTrend(data.surfaceWindMs, 1.4) },
+      { icon: Wind, label: "상층풍", value: `${data.upperWindSpeedMs}m/s`, helper: data.upperWindDirection, unit: "m/s", trend: metricTrend(data.upperWindSpeedMs, 2.1) },
       { icon: Eye, label: "시정", value: `${data.visibilityKm}km`, helper: "관측조건", unit: "km", trend: metricTrend(data.visibilityKm, 1.6) },
       { icon: Cloud, label: "운량", value: `${data.cloudCoverPercent}%`, helper: "기상상태", unit: "%", trend: metricTrend(data.cloudCoverPercent, 12) },
       { icon: Cloud, label: "안개", value: data.fog, helper: "시야제한", unit: "단계", trend: trend(data.fog === "심함" ? 4 : data.fog === "발생" ? 3 : data.fog === "의심" ? 2 : 1, 0.5) },
       { icon: Mountain, label: "지형", value: data.terrain, helper: "이동조건", unit: "지수", trend: trend(data.terrain === "산악" ? 70 : data.terrain === "도심" ? 55 : 35, 8) },
       { icon: Gauge, label: "일출", value: data.sunrise, helper: "천문", unit: "분", trend: weeklyTimeValues(clockToMinutes(data.sunrise)) },
       { icon: Gauge, label: "일몰", value: data.sunset, helper: "천문", unit: "분", trend: weeklyTimeValues(clockToMinutes(data.sunset)) },
+      { icon: Gauge, label: "BMNT", value: data.bmnt, helper: "아침박명", unit: "분", trend: weeklyTimeValues(clockToMinutes(data.bmnt)) },
+      { icon: Gauge, label: "EENT", value: data.eent, helper: "저녁박명", unit: "분", trend: weeklyTimeValues(clockToMinutes(data.eent)) },
+      ...objectiveMetricCards(operation),
     ];
   }
 
@@ -288,10 +358,31 @@ function getMetricCards(operation: TheOneOperation): MetricItem[] {
       { icon: Gauge, label: "기압", value: `${data.pressureHpa}hPa`, helper: "기상변화", unit: "hPa", trend: metricTrend(data.pressureHpa, 3) },
       { icon: Thermometer, label: "기온", value: `${data.temperatureC}℃`, helper: "장비영향", unit: "℃", trend: metricTrend(data.temperatureC, 2) },
       { icon: Activity, label: "습도", value: `${data.humidityPercent}%`, helper: `이슬점 ${data.dewPointC}℃`, unit: "%", trend: metricTrend(data.humidityPercent, 7) },
+      ...objectiveMetricCards(operation),
     ];
   }
 
   return [];
+}
+
+function hydrateStoredOperation(operation: Partial<TheOneOperation>): TheOneOperation | null {
+  if (!operation.type) return null;
+
+  const base =
+    allOperations.find((item) => item.id === operation.id) ??
+    allOperations.find((item) => item.type === operation.type);
+
+  if (!base) return null;
+
+  return {
+    ...structuredClone(base),
+    id: operation.id ?? base.id,
+    name: operation.name ?? base.name,
+    area: operation.area ?? base.area,
+    datetime: operation.datetime ?? base.datetime,
+    imageTone: operation.imageTone ?? base.imageTone,
+    center: operation.center ?? base.center,
+  };
 }
 
 function loadStoredOperations() {
@@ -302,11 +393,145 @@ function loadStoredOperations() {
 
   try {
     const parsed = JSON.parse(stored) as TheOneOperation[];
-    return Array.isArray(parsed) ? parsed : defaultOperations;
+    if (!Array.isArray(parsed)) return defaultOperations;
+
+    return parsed
+      .map((operation) => hydrateStoredOperation(operation))
+      .filter((operation): operation is TheOneOperation => Boolean(operation));
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);
     return defaultOperations;
   }
+}
+
+function fallbackLiveAlerts(activeType: OperationType): LiveAlert[] {
+  const timestamp = new Date().toISOString();
+  const common: LiveAlert[] = [
+    {
+      id: `system-${activeType}`,
+      type: "system",
+      level: "info",
+      title: "정적 캐시 운용",
+      message: "GitHub Actions가 생성한 최신 JSON 캐시를 주기적으로 확인합니다.",
+      source: "백룡 캐시",
+      timestamp,
+    },
+  ];
+
+  if (activeType === "coastal") {
+    return [
+      {
+        id: "coastal-watch-wave",
+        type: "coastal",
+        level: "watch",
+        title: "해상 변동 감시",
+        message: "파고·조석·시정 변동이 큰 항구는 실시간 탭에서 윈디와 기상청 지도를 함께 확인하세요.",
+        source: "해양기상 캐시",
+        timestamp,
+      },
+      ...common,
+    ];
+  }
+
+  if (activeType === "ground") {
+    return [
+      {
+        id: "ground-watch-heat",
+        type: "ground",
+        level: "watch",
+        title: "온열지수 확인",
+        message: "고온·고습 조건에서는 온열지수와 체감온도 카드를 우선 확인하세요.",
+        source: "육상기상 캐시",
+        timestamp,
+      },
+      ...common,
+    ];
+  }
+
+  return [
+    {
+      id: "air-watch-drone",
+      type: "air",
+      level: "watch",
+      title: "드론 운용 기상",
+      message: "돌풍·저시정·낙뢰 변동은 드론 운용 제한 요소로 실시간 확인이 필요합니다.",
+      source: "공중기상 캐시",
+      timestamp,
+    },
+    ...common,
+  ];
+}
+
+function loadAlertHistory() {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(ALERT_HISTORY_STORAGE_KEY) ?? "[]") as LiveAlert[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    window.localStorage.removeItem(ALERT_HISTORY_STORAGE_KEY);
+    return [];
+  }
+}
+
+function mergeAlertHistory(current: LiveAlert[], incoming: LiveAlert[]) {
+  const map = new Map<string, LiveAlert>();
+
+  [...incoming, ...current].forEach((alert) => {
+    map.set(alert.id, alert);
+  });
+
+  return [...map.values()]
+    .sort((first, second) => new Date(second.timestamp).getTime() - new Date(first.timestamp).getTime())
+    .slice(0, 30);
+}
+
+function useLiveAlerts(activeType: OperationType) {
+  const [alerts, setAlerts] = useState<LiveAlert[]>([]);
+  const [history, setHistory] = useState<LiveAlert[]>([]);
+
+  useEffect(() => {
+    queueMicrotask(() => setHistory(loadAlertHistory()));
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function refreshAlerts() {
+      let nextAlerts = fallbackLiveAlerts(activeType);
+
+      try {
+        const response = await fetch(`${BASE_PATH}/data/weather-cache.json?ts=${Date.now()}`, { cache: "no-store" });
+        if (response.ok) {
+          const payload = (await response.json()) as WeatherCachePayload;
+          const cachedAlerts = Array.isArray(payload.alerts) ? payload.alerts : [];
+          const filtered = cachedAlerts.filter((alert) => alert.type === "system" || alert.type === activeType);
+          if (filtered.length > 0) nextAlerts = filtered;
+        }
+      } catch {
+        nextAlerts = fallbackLiveAlerts(activeType);
+      }
+
+      if (!isActive) return;
+
+      setAlerts(nextAlerts);
+      setHistory((current) => {
+        const merged = mergeAlertHistory(current, nextAlerts);
+        window.localStorage.setItem(ALERT_HISTORY_STORAGE_KEY, JSON.stringify(merged));
+        return merged;
+      });
+    }
+
+    refreshAlerts();
+    const timer = window.setInterval(refreshAlerts, 60_000);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(timer);
+    };
+  }, [activeType]);
+
+  return { alerts, history };
 }
 
 export function TheOneApp() {
@@ -343,7 +568,6 @@ export function TheOneApp() {
     return activeOperations.find((operation) => operation.id === selectedId) ?? activeOperations[0] ?? operations[0];
   }, [activeOperations, operations, selectedId]);
 
-  const selectedIndicators = useMemo(() => (selectedOperation ? getObjectiveIndicators(selectedOperation) : []), [selectedOperation]);
   const config = operationConfigs[activeType];
 
   function handleModeSelect(type: OperationType) {
@@ -391,6 +615,7 @@ export function TheOneApp() {
           onMode={() => setView("mode")}
         />
       )}
+      {view !== "splash" && <LiveAlertTicker activeType={activeType} />}
       <main className={cx("one-main", view === "mode" && "is-centered", view === "splash" && "is-splash")}>
         {view === "splash" && <SplashScreen onEnter={() => setView("mode")} />}
         {view === "mode" && <ModeSelect activeType={activeType} onSelect={handleModeSelect} onSettings={() => setView("settings")} />}
@@ -417,10 +642,7 @@ export function TheOneApp() {
         )}
         {view === "detail" && (
           selectedOperation ? (
-            <DetailScreen
-              operation={selectedOperation}
-              indicators={selectedIndicators}
-            />
+            <DetailScreen operation={selectedOperation} />
           ) : (
             <EmptyOperationState type={activeType} onAdd={() => setView("add")} />
           )
@@ -476,6 +698,39 @@ function AppHeader({
       </div>
       <img src={assetUrl("22.svg")} alt="" className="header-mark" />
     </header>
+  );
+}
+
+function LiveAlertTicker({ activeType }: { activeType: OperationType }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const { alerts, history } = useLiveAlerts(activeType);
+  const visibleAlerts = alerts.length > 0 ? alerts : fallbackLiveAlerts(activeType);
+  const tickerText = visibleAlerts.map((alert) => `${alert.title} · ${alert.message}`).join("     ");
+
+  return (
+    <section className="alert-ticker" aria-live="polite">
+      <div className="alert-ticker-strip">
+        <span className={cx("alert-dot", `is-${visibleAlerts[0]?.level ?? "info"}`)} />
+        <div className="alert-marquee">
+          <p>{tickerText}</p>
+        </div>
+        <button type="button" onClick={() => setIsOpen((current) => !current)}>
+          기록
+        </button>
+      </div>
+      {isOpen && (
+        <div className="alert-history-panel">
+          {(history.length > 0 ? history : visibleAlerts).map((alert) => (
+            <article key={`${alert.id}-${alert.timestamp}`} className={cx("alert-history-item", `is-${alert.level}`)}>
+              <span>{alert.source}</span>
+              <strong>{alert.title}</strong>
+              <p>{alert.message}</p>
+              <time>{new Date(alert.timestamp).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", hour12: false })}</time>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -679,7 +934,7 @@ function categoricalForecastValues(metric: MetricItem, labels: string[]) {
 }
 
 function isDailyFixedMetric(metric: MetricItem) {
-  return ["일출", "일몰", "월출", "월몰"].includes(metric.label);
+  return ["일출", "일몰", "월출", "월몰", "BMNT", "EENT"].includes(metric.label);
 }
 
 function isTideMetric(metric: MetricItem) {
@@ -820,33 +1075,6 @@ function TideWeeklyPanel({ metric }: { metric: MetricItem }) {
   );
 }
 
-function ObjectiveIndicatorPanel({ indicators }: { indicators: ObjectiveIndicator[] }) {
-  return (
-    <section className="objective-grid">
-      {indicators.map((indicator) => {
-        const gaugeValue = indicatorGauge(indicator);
-
-        return (
-          <article
-            key={indicator.label}
-            className={cx("objective-card", `tone-${indicator.tone}`)}
-            style={{ "--gauge": `${gaugeValue}` } as CSSProperties}
-          >
-            <div className="objective-ring" aria-hidden="true">
-              <strong>{indicator.value}</strong>
-              <em>{indicator.unit}</em>
-            </div>
-            <div className="objective-copy">
-              <span>{indicator.label}</span>
-              <b>{indicator.level}</b>
-            </div>
-          </article>
-        );
-      })}
-    </section>
-  );
-}
-
 function OperationListScreen({
   activeType,
   operations,
@@ -977,13 +1205,7 @@ function groupCatalogOperations(candidates: TheOneOperation[]): CatalogGroup[] {
     .sort((first, second) => first.name.localeCompare(second.name, "ko"));
 }
 
-function DetailScreen({
-  operation,
-  indicators,
-}: {
-  operation: TheOneOperation;
-  indicators: ObjectiveIndicator[];
-}) {
+function DetailScreen({ operation }: { operation: TheOneOperation }) {
   return (
     <div className="screen-stack">
       <div className="page-heading">
@@ -992,7 +1214,6 @@ function DetailScreen({
         <em>{operation.datetime}</em>
       </div>
       <MetricCarousel operation={operation} />
-      <ObjectiveIndicatorPanel indicators={indicators} />
       {operation.type === "air" && operation.air && <AltitudeLayersCard operation={operation} />}
     </div>
   );
@@ -1035,6 +1256,7 @@ function OperationDetailTabs({
       <div className="tab-row" aria-label="상세 메뉴">
         {[
           ["summary", "개황"],
+          ["live", "실시간"],
           ["week", "주간예측"],
           ["map", "AI 브리핑"],
         ].map(([key, label]) => (
@@ -1046,11 +1268,92 @@ function OperationDetailTabs({
       {tab === "summary" && (
         <div className="screen-stack">
           <MetricCarousel operation={operation} />
-          <ObjectiveIndicatorPanel indicators={indicators} />
         </div>
       )}
+      {tab === "live" && <LiveMapPanel operation={operation} />}
       {tab === "week" && <WeeklyForecastPanel operation={operation} />}
       {tab === "map" && <AiBriefingPanel operation={operation} indicators={indicators} />}
+    </section>
+  );
+}
+
+function windyEmbedUrl(operation: TheOneOperation) {
+  const [lat, lon] = operation.center ?? [36.5, 126.5];
+  const overlay = operation.type === "coastal" ? "waves" : operation.type === "air" ? "wind" : "rain";
+  const zoom = operation.type === "coastal" ? "7" : "8";
+  const params = new URLSearchParams({
+    lat: `${lat}`,
+    lon: `${lon}`,
+    detailLat: `${lat}`,
+    detailLon: `${lon}`,
+    zoom,
+    level: "surface",
+    overlay,
+    product: "ecmwf",
+    marker: "true",
+    message: "true",
+    calendar: "now",
+    type: "map",
+    location: "coordinates",
+    metricWind: "m/s",
+    metricTemp: "°C",
+  });
+
+  return `https://embed.windy.com/embed2.html?${params.toString()}`;
+}
+
+function windyOpenUrl(operation: TheOneOperation) {
+  const [lat, lon] = operation.center ?? [36.5, 126.5];
+  const zoom = operation.type === "coastal" ? 7 : 8;
+
+  return `https://www.windy.com/?${lat},${lon},${zoom}`;
+}
+
+function kmaMapUrl(operation: TheOneOperation) {
+  return operation.type === "coastal" ? KMA_MARINE_MAP_URL : KMA_WEATHER_MAP_URL;
+}
+
+function LiveMapPanel({ operation }: { operation: TheOneOperation }) {
+  const primaryKmaUrl = kmaMapUrl(operation);
+  const quickLinks = [
+    { label: "윈디", helper: "파고·바람·강수", href: windyOpenUrl(operation), icon: operation.type === "coastal" ? Waves : Wind },
+    { label: operation.type === "coastal" ? "해양기상" : "기상청 지도", helper: operation.type === "coastal" ? "특보·관측·CCTV" : "레이더·특보·관측", href: primaryKmaUrl, icon: Cloud },
+    { label: "관측 확인", helper: operation.type === "coastal" ? "항구·해수욕장" : "지역 관측망", href: KMA_WEATHER_MAP_URL, icon: Eye },
+  ];
+
+  return (
+    <section className="live-map-stack">
+      <article className="live-map-card">
+        <div className="live-map-head">
+          <span>윈디</span>
+          <a href={windyOpenUrl(operation)} target="_blank" rel="noreferrer">새창</a>
+        </div>
+        <div className="live-map-frame is-windy">
+          <iframe src={windyEmbedUrl(operation)} title={`${operation.name} 윈디 지도`} loading="lazy" allowFullScreen />
+        </div>
+      </article>
+      <article className="live-map-card">
+        <div className="live-map-head">
+          <span>{operation.type === "coastal" ? "기상청 해양기상" : "기상청 지도"}</span>
+          <a href={primaryKmaUrl} target="_blank" rel="noreferrer">열기</a>
+        </div>
+        <div className="live-map-frame is-kma">
+          <iframe src={primaryKmaUrl} title={`${operation.name} 기상청 지도`} loading="lazy" />
+        </div>
+      </article>
+      <div className="live-action-grid">
+        {quickLinks.map((link) => {
+          const Icon = link.icon;
+
+          return (
+            <a key={link.label} href={link.href} target="_blank" rel="noreferrer" className="live-action-card">
+              <Icon size={19} />
+              <span>{link.label}</span>
+              <em>{link.helper}</em>
+            </a>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -1089,10 +1392,10 @@ function generateAiBriefing(operation: TheOneOperation, indicators: ObjectiveInd
   if (operation.type === "air" && operation.air) {
     const data = operation.air;
     const env = operation.aviationEnvironment;
-    bullets.push(`평균풍속 ${data.windSpeedMs}m/s, 순간풍속 ${data.gustSpeedMs}m/s, 운고 ${data.cloudCeilingFt}ft, 시정 ${data.visibilityKm}km 기준입니다.`);
-    if (env?.lightningRisk && !["없음", "낮음"].includes(env.lightningRisk)) bullets.push(`낙뢰위험이 ${env.lightningRisk} 단계로 표시되어 즉시 위험기상 확인이 필요합니다.`);
-    if (data.cloudCeilingFt <= 1200) bullets.push("운고가 낮아 저고도 운용과 영상 획득 여건이 제한될 수 있습니다.");
-    if (data.gustSpeedMs >= 14) bullets.push("돌풍 값이 높아 항로 안정성과 장비 운용 한계를 확인해야 합니다.");
+    bullets.push(`드론 기준 평균풍속 ${data.windSpeedMs}m/s, 순간풍속 ${data.gustSpeedMs}m/s, 운고 ${data.cloudCeilingFt}ft, 시정 ${data.visibilityKm}km 기준입니다.`);
+    if (env?.lightningRisk && !["없음", "낮음"].includes(env.lightningRisk)) bullets.push(`낙뢰위험이 ${env.lightningRisk} 단계로 표시되어 드론 운용 전 즉시 위험기상 확인이 필요합니다.`);
+    if (data.cloudCeilingFt <= 1200) bullets.push("운고가 낮아 저고도 드론 운용과 영상 획득 여건이 제한될 수 있습니다.");
+    if (data.gustSpeedMs >= 14) bullets.push("돌풍 값이 높아 기체 자세 안정성과 자동복귀 여유를 확인해야 합니다.");
   }
 
   return {
@@ -1181,7 +1484,7 @@ function AltitudeLayersCard({ operation }: { operation: TheOneOperation }) {
 
   return (
     <section className="panel-card">
-      <h3>고도별 기상</h3>
+      <h3>드론 고도별 기상</h3>
       <div className="table-list">
         <div className="table-head">
           <span>고도</span>
@@ -1209,7 +1512,7 @@ function SettingsScreen({ operations, onReset }: { operations: TheOneOperation[]
     {
       title: "기상청",
       icon: Cloud,
-      items: ["API허브", "단기·초단기예보", "ASOS 관측", "기상특보"],
+      items: ["API허브", "단기·초단기예보", "ASOS 관측", "기상특보", "위험기상 알림"],
     },
     {
       title: "해양",
@@ -1224,7 +1527,7 @@ function SettingsScreen({ operations, onReset }: { operations: TheOneOperation[]
     {
       title: "항공",
       icon: Plane,
-      items: ["항공기상", "운고·시정", "낙뢰·난류"],
+      items: ["드론 저고도 기상", "운고·시정", "낙뢰·돌풍"],
     },
   ];
   const creators = ["대위 정동호", "9급 전재문", "병장 김지성", "병장 김준우", "상병 김민규", "일병 임다민", "일병 전호성"];
@@ -1271,7 +1574,9 @@ function SettingsScreen({ operations, onReset }: { operations: TheOneOperation[]
         <div className="api-flow">
           <span>공공 API</span>
           <b />
-          <span>변환 JSON</span>
+          <span>Actions 변환</span>
+          <b />
+          <span>JSON 캐시</span>
           <b />
           <span>정적 화면</span>
         </div>

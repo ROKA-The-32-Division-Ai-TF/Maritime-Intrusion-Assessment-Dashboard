@@ -14,9 +14,11 @@
 - 지역/임무 목록과 Windy 지도 중심 첫 화면
 - 사전 등록 후보 검색 및 그룹별 지역/임무 추가
 - 개황 카드, 원형 지표 그래프, 시간대별 선형 그래프
+- 개황 옆 실시간 탭에서 Windy 지도와 기상청/해양기상 지도 확인
+- 상단 뉴스형 알림 배너와 브라우저별 알림 기록
 - 입력 지역/임무와 핵심 기상값 LocalStorage 저장
 - GitHub Pages 같은 정적 호스팅 배포 가능
-- 추후 API JSON 연동을 고려한 데이터·UI 분리
+- GitHub Actions 기반 JSON 캐시 갱신 구조
 
 ## 객관 지표 구조
 
@@ -30,11 +32,22 @@
 
 현재 표시 지표 예시는 다음과 같습니다.
 
-- 해안작전: 이안류 위험지수, 풍랑특보, 해무 위험도, 해상위험지수
-- 지상작전: 불쾌지수, 체감온도, 통합대기환경지수, 산불위험지수
-- 공중작전: 저시정 위험도, 난류강도지수, 착빙지수, 낙뢰위험도
+- 해안작전: 앞바다/먼바다 파고, 해수온도, 월광, 조석, BMNT/EENT, 이안류 위험지수, 풍랑특보, 해무 위험도, 해상위험지수
+- 지상작전: 기온, 습도, 지상풍/상층풍, BMNT/EENT, 온열지수, 불쾌지수, 체감온도, 통합대기환경지수, 산불위험지수
+- 공중작전: 드론 운용 기준의 풍속, 돌풍, 운고, 시정, 저고도 고도별 기상, 드론운용지수, 저시정 위험도, 난류·돌풍지수, 착빙지수, 낙뢰위험도
 
 기본 mock 데이터는 `src/lib/the-one-data.ts`에 있으며, `src/lib/the-one-engine.ts`는 모바일 앱에서 사용하는 데이터 타입을 정의합니다.
+
+## 실시간 캐시와 알림
+
+정적 사이트는 브라우저에서 운영 API 키를 직접 보유하지 않습니다. 대신 GitHub Actions가 `npm run update:weather-cache`를 실행해 `public/data/weather-cache.json`을 생성하고, 화면은 이 JSON을 1분 간격으로 확인합니다.
+
+- 기본 구조: `scripts/update-weather-cache.mjs`
+- 출력 위치: `public/data/weather-cache.json`
+- 화면 기능: 상단 뉴스형 배너, 알림 기록, 작전 유형별 필터링
+- 연동 방식: GitHub Secrets 또는 내부망 변환 서버에서 API 키를 사용하고, 결과 JSON만 정적 사이트로 전달
+
+현재 스크립트는 `WEATHER_CACHE_SOURCE_URL`이 있으면 준비된 JSON을 가져오고, 없으면 공개 가능한 fallback 캐시를 생성합니다. 실제 기상청·해양·천문·대기질·산불 API를 붙일 때도 프론트엔드 코드에는 키를 넣지 않습니다.
 
 ## 정적 운용 원칙
 
@@ -79,6 +92,17 @@ GitHub Pages 하위 경로에 배포할 때는 저장소 페이지 경로에 맞
 ```bash
 NEXT_PUBLIC_BASE_PATH=/Maritime-Intrusion-Assessment-Dashboard npm run build
 ```
+
+## GitHub Actions 배포
+
+`.github/workflows/pages.yml`은 `main` 푸시, 수동 실행, 30분 주기 실행에서 다음 순서로 동작합니다.
+
+1. 의존성 설치
+2. 기상 JSON 캐시 생성
+3. 정적 사이트 빌드
+4. GitHub Pages 배포
+
+Actions Secrets에 `WEATHER_CACHE_SOURCE_URL`, `WEATHER_CACHE_SOURCE_TOKEN`, `KMA_APIHUB_AUTH_KEY`, `KMA_SERVICE_KEY`, `KHOA_SERVICE_KEY`, `KASI_SERVICE_KEY`, `AIRKOREA_SERVICE_KEY`, `FOREST_SERVICE_KEY` 등을 넣어 확장할 수 있습니다.
 
 ## 보안 주의
 
