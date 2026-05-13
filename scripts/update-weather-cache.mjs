@@ -303,21 +303,15 @@ async function fetchRiseSet(target) {
 }
 
 async function fetchTide(target) {
-  const serviceKey = apiKey("KHOA_SERVICE_KEY");
   const obsCode = (target.tideEnv ? env(target.tideEnv) : "") || target.tideObsCode;
   if (!obsCode) return null;
 
-  const requestParams = {
+  const json = await fetchJson(KHOA_TIDE_URL, {
     obsCode,
     reqDate: ymd(kstNow()),
     type: "json",
     numOfRows: 20,
     pageNo: 1,
-  };
-  if (serviceKey) requestParams.serviceKey = serviceKey;
-
-  const json = await fetchJson(KHOA_TIDE_URL, {
-    ...requestParams,
     isSample: "Y",
   });
   const tideItems = json?.body?.items?.item ?? json?.response?.body?.items?.item ?? [];
