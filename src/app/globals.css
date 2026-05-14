@@ -2499,23 +2499,34 @@ body:has(.desktop-app) {
   gap: 16px;
 }
 
+.desktop-region-grid {
+  min-height: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 250px minmax(620px, 1fr) 330px;
+  gap: 16px;
+}
+
 .desktop-live-left,
 .desktop-live-center,
 .desktop-live-right,
+.desktop-region-side,
 .desktop-settings-grid {
   min-height: 0;
 }
 
 .desktop-live-left,
 .desktop-live-center,
-.desktop-live-right {
+.desktop-live-right,
+.desktop-region-side {
   display: grid;
   align-content: start;
   gap: 14px;
 }
 
 .desktop-live-left,
-.desktop-live-right {
+.desktop-live-right,
+.desktop-region-side {
   max-height: calc(100dvh - 48px);
   overflow-y: auto;
   padding-right: 2px;
@@ -2722,6 +2733,287 @@ body:has(.desktop-app) {
   height: 100%;
   border: 0;
   display: block;
+}
+
+.desktop-vworld-panel {
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--desktop-line);
+  border-radius: 24px;
+  background: #e9f1fb;
+  box-shadow: 0 18px 48px rgba(5, 16, 38, 0.18);
+}
+
+.desktop-vworld-map {
+  position: relative;
+  height: calc(100dvh - 48px);
+  min-height: 620px;
+  overflow: hidden;
+  background: #d7e5f4;
+}
+
+.desktop-vworld-tiles img {
+  position: absolute;
+  width: 256px;
+  height: 256px;
+  object-fit: cover;
+  user-select: none;
+}
+
+.desktop-vworld-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 52% 42%, rgba(255, 255, 255, 0.16), transparent 32%),
+    linear-gradient(180deg, rgba(9, 26, 60, 0.02), rgba(9, 26, 60, 0.2));
+  pointer-events: none;
+}
+
+.desktop-vworld-badge {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 3;
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(4, 15, 34, 0.74);
+  color: white;
+  backdrop-filter: blur(14px);
+}
+
+.desktop-vworld-badge strong {
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.desktop-vworld-badge span {
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.desktop-map-marker {
+  position: absolute;
+  z-index: 4;
+  transform: translate(-50%, -50%);
+  min-width: 88px;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #172238;
+  padding: 9px 10px;
+  box-shadow: 0 14px 34px rgba(8, 22, 48, 0.24);
+  backdrop-filter: blur(12px);
+}
+
+.desktop-map-marker span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: #eef5ff;
+  font-size: 20px;
+}
+
+.desktop-map-marker strong {
+  font-size: 12px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.desktop-map-marker.is-ground span {
+  background: #e8f7eb;
+}
+
+.desktop-map-marker.is-air span {
+  background: #e6f8ff;
+}
+
+.desktop-map-marker.is-active {
+  outline: 3px solid var(--desktop-blue);
+}
+
+.desktop-map-marker.has-alert {
+  background: #fff6e1;
+  outline: 2px solid #f8c13d;
+}
+
+.desktop-region-popup header {
+  display: grid;
+  gap: 4px;
+}
+
+.desktop-region-popup header span,
+.desktop-region-popup header em {
+  color: var(--desktop-muted);
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.desktop-region-popup header h2 {
+  margin: 0;
+  color: var(--desktop-blue);
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.desktop-region-status-row {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--desktop-blue-soft);
+}
+
+.desktop-region-status-row b {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: white;
+  font-size: 24px;
+}
+
+.desktop-region-status-row strong {
+  color: var(--desktop-blue);
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.desktop-region-status-row span {
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: white;
+  color: #4a5b77;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.desktop-astro-card,
+.desktop-astro-overview article {
+  display: grid;
+  align-items: center;
+  border: 1px solid #dce8fb;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 90% 8%, rgba(37, 74, 165, 0.11), transparent 36%),
+    white;
+}
+
+.desktop-astro-card {
+  grid-template-columns: 44px 1fr;
+  gap: 10px;
+  padding: 12px;
+}
+
+.desktop-astro-card b,
+.desktop-astro-overview b {
+  font-size: 26px;
+}
+
+.desktop-astro-card strong,
+.desktop-astro-overview strong {
+  color: #172238;
+  font-size: 17px;
+  font-weight: 950;
+}
+
+.desktop-astro-card span,
+.desktop-astro-card em,
+.desktop-astro-overview span,
+.desktop-astro-overview em {
+  color: var(--desktop-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.desktop-astro-card em {
+  grid-column: 1 / -1;
+}
+
+.desktop-region-metric-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.desktop-region-metric-list article {
+  min-height: 76px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #dfe7f2;
+  border-radius: 15px;
+  background: #f7faff;
+}
+
+.desktop-region-metric-list span,
+.desktop-region-metric-list em {
+  color: var(--desktop-muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.desktop-region-metric-list strong {
+  color: var(--desktop-ink);
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.desktop-api-panel div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid #dce8fb;
+  border-radius: 15px;
+  background: #f8fbff;
+}
+
+.desktop-api-panel strong {
+  color: var(--desktop-blue);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.desktop-api-panel span {
+  color: var(--desktop-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 850;
+}
+
+.desktop-astro-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.desktop-astro-overview article {
+  min-height: 104px;
+  align-content: center;
+  justify-items: start;
+  gap: 5px;
+  padding: 13px;
+}
+
+.desktop-astro-overview .is-phase {
+  background:
+    radial-gradient(circle at 90% 8%, rgba(248, 193, 61, 0.18), transparent 36%),
+    linear-gradient(145deg, #ffffff, #f8fbff);
 }
 
 .desktop-weekly-grid .desktop-live-center {
@@ -3013,6 +3305,28 @@ body:has(.desktop-app) {
   background: white;
 }
 
+.desktop-assessment-block {
+  min-height: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.desktop-assessment-block h2 {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--desktop-blue), #5177d2);
+  color: white;
+  box-shadow: 0 12px 28px rgba(37, 74, 165, 0.2);
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 950;
+}
+
 .desktop-analysis-table,
 .desktop-assessment-table {
   width: 100%;
@@ -3283,6 +3597,11 @@ body:has(.desktop-app) {
     gap: 10px;
   }
 
+  .desktop-region-grid {
+    grid-template-columns: 220px minmax(420px, 1fr) 270px;
+    gap: 10px;
+  }
+
   .desktop-settings-grid {
     grid-template-columns: minmax(0, 1fr) 280px;
     gap: 12px;
@@ -3340,6 +3659,7 @@ body:has(.desktop-app) {
   }
 
   .desktop-live-grid,
+  .desktop-region-grid,
   .desktop-settings-grid {
     grid-template-columns: 1fr;
     height: auto;
@@ -3351,6 +3671,7 @@ body:has(.desktop-app) {
 
   .desktop-live-left,
   .desktop-live-right,
+  .desktop-region-side,
   .desktop-catalog-panel {
     max-height: none;
   }
@@ -3362,6 +3683,10 @@ body:has(.desktop-app) {
 
   .desktop-metric-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .desktop-vworld-map {
+    height: 620px;
   }
 }
 
@@ -3383,10 +3708,18 @@ body:has(.desktop-app) {
   }
 
   .desktop-metric-grid,
+  .desktop-astro-overview,
   .desktop-operation-rail,
   .desktop-catalog-grid,
+  .desktop-region-metric-list,
+  .desktop-weekly-card-grid,
   .desktop-live-map-grid {
     grid-template-columns: 1fr;
+  }
+
+  .desktop-weekly-time-grid,
+  .desktop-weekly-text-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

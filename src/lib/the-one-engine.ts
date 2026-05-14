@@ -53,6 +53,9 @@ export type GroundData = {
   sunset: string;
   bmnt: string;
   eent: string;
+  moonrise: string;
+  moonset: string;
+  moonlightPercent: number;
   apparentTemperatureC: number;
   wbgtC: number;
   surfaceWindMs: number;
@@ -73,6 +76,13 @@ export type AirData = {
   temperatureC: number;
   precipitationProbability: number;
   precipitationMm: number;
+  sunrise: string;
+  sunset: string;
+  bmnt: string;
+  eent: string;
+  moonrise: string;
+  moonset: string;
+  moonlightPercent: number;
   windSpeedMs: number;
   windDirection: string;
   gustSpeedMs: number;

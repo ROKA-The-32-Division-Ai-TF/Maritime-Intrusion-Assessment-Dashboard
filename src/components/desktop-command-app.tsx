@@ -29,7 +29,7 @@ import {
 import { allOperations, defaultOperations, operationConfigs } from "@/lib/the-one-data";
 import type { OperationType, TheOneOperation } from "@/lib/the-one-engine";
 
-type DesktopMenu = "weather" | "access" | "live" | "weekly" | "settings";
+type DesktopMenu = "region" | "weather" | "access" | "live" | "weekly" | "settings";
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type LiveAlertLevel = "info" | "watch" | "warning";
 type LiveAlert = {
@@ -57,9 +57,11 @@ type DesktopMetric = {
 };
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+const VWORLD_API_KEY = "15748A33-46F2-3387-8DF5-369AEC72C541";
 const DESKTOP_SELECTION_KEY = "baekryong-desktop-selection-v1";
 const DESKTOP_TYPE_KEY = "baekryong-desktop-type-v1";
 const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
+  { id: "region", label: "작전지역 현황", icon: MapIcon },
   { id: "weather", label: "기상분석표", icon: CalendarDays },
   { id: "access", label: "밀입국 가능성", icon: ListChecks },
   { id: "live", label: "실시간 상황", icon: MapIcon },
@@ -114,6 +116,10 @@ function alertMatchesOperation(alert: LiveAlert, activeType: OperationType, oper
 
 function filterAlertsForOperation(alerts: LiveAlert[], activeType: OperationType, operation?: TheOneOperation) {
   return alerts.filter((alert) => alertMatchesOperation(alert, activeType, operation));
+}
+
+function alertsForOperation(alerts: LiveAlert[], operation: TheOneOperation) {
+  return alerts.filter((alert) => alertMatchesOperation(alert, operation.type, operation));
 }
 
 function assetUrl(file: string) {
@@ -234,6 +240,109 @@ function metricUnit(value: string) {
   return match?.[1]?.trim() ?? "";
 }
 
+function operationAstronomy(operation: TheOneOperation) {
+  if (operation.coastal) {
+    return {
+      sunrise: operation.coastal.sunrise,
+      sunset: operation.coastal.sunset,
+      bmnt: operation.coastal.bmnt,
+      eent: operation.coastal.eent,
+      moonrise: operation.coastal.moonrise,
+      moonset: operation.coastal.moonset,
+      moonlightPercent: operation.coastal.moonlightPercent,
+    };
+  }
+
+  if (operation.ground) {
+    return {
+      sunrise: operation.ground.sunrise,
+      sunset: operation.ground.sunset,
+      bmnt: operation.ground.bmnt,
+      eent: operation.ground.eent,
+      moonrise: operation.ground.moonrise,
+      moonset: operation.ground.moonset,
+      moonlightPercent: operation.ground.moonlightPercent,
+    };
+  }
+
+  if (operation.air) {
+    return {
+      sunrise: operation.air.sunrise,
+      sunset: operation.air.sunset,
+      bmnt: operation.air.bmnt,
+      eent: operation.air.eent,
+      moonrise: operation.air.moonrise,
+      moonset: operation.air.moonset,
+      moonlightPercent: operation.air.moonlightPercent,
+    };
+  }
+
+  return null;
+}
+
+function weatherLabel(operation: TheOneOperation) {
+  return operation.coastalEnvironment?.weatherStatus
+    ?? operation.groundEnvironment?.weatherStatus
+    ?? operation.aviationEnvironment?.weatherStatus
+    ?? "맑음";
+}
+
+function weatherEmoji(operation: TheOneOperation, alerts: LiveAlert[] = []) {
+  if (alertsForOperation(alerts, operation).length > 0) return "⚠️";
+  const weather = weatherLabel(operation);
+  if (weather.includes("비") || weather.includes("폭우")) return "🌧";
+  if (weather.includes("눈")) return "❄";
+  if (weather.includes("안개")) return "🌫";
+  if (weather.includes("흐림")) return "☁";
+  return "☀";
+}
+
+function operationClockTime(operation: TheOneOperation) {
+  if (operation.coastal?.currentTime) return operation.coastal.currentTime;
+  if (operation.ground?.currentTime) return operation.ground.currentTime;
+  const match = operation.datetime.match(/(\d{1,2}):(\d{2})/);
+  return match ? `${match[1].padStart(2, "0")}:${match[2]}` : "20:00";
+}
+
+function astronomyPhase(operation: TheOneOperation) {
+  const astro = operationAstronomy(operation);
+  if (!astro) return { label: "확인", emoji: "◌", detail: "-" };
+
+  const nowMinutes = clockToMinutes(operationClockTime(operation));
+  const bmnt = clockToMinutes(astro.bmnt);
+  const sunrise = clockToMinutes(astro.sunrise);
+  const sunset = clockToMinutes(astro.sunset);
+  const eent = clockToMinutes(astro.eent);
+
+  if (nowMinutes < bmnt) return { label: "심야", emoji: "🌙", detail: `BMNT ${astro.bmnt}` };
+  if (nowMinutes < sunrise) return { label: "BMNT", emoji: "🌅", detail: `일출 ${astro.sunrise}` };
+  if (nowMinutes < sunset) return { label: "주간", emoji: "☀", detail: `일몰 ${astro.sunset}` };
+  if (nowMinutes < eent) return { label: "EENT", emoji: "🌇", detail: `EENT ${astro.eent}` };
+  return { label: "야간", emoji: "🌙", detail: `월광 ${astro.moonlightPercent}%` };
+}
+
+function mercatorPixel(lat: number, lon: number, zoom: number) {
+  const sinLat = Math.sin((lat * Math.PI) / 180);
+  const scale = 256 * 2 ** zoom;
+  return {
+    x: ((lon + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
+  };
+}
+
+function vworldTileUrl(x: number, y: number, zoom: number) {
+  return `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_API_KEY}/Base/${zoom}/${y}/${x}.png`;
+}
+
+function mapCenter(operations: TheOneOperation[], fallback?: TheOneOperation) {
+  const centers = operations.map((operation) => operation.center).filter(Boolean) as [number, number][];
+  if (centers.length === 0) return fallback?.center ?? ([36.7, 126.6] as [number, number]);
+  return [
+    centers.reduce((sum, center) => sum + center[0], 0) / centers.length,
+    centers.reduce((sum, center) => sum + center[1], 0) / centers.length,
+  ] as [number, number];
+}
+
 function applyOperationUpdates(operations: TheOneOperation[], payload: WeatherCachePayload) {
   const updates = Array.isArray(payload.operationUpdates) ? payload.operationUpdates : [];
   if (updates.length === 0) return operations;
@@ -312,6 +421,8 @@ function desktopMetrics(operation: TheOneOperation): DesktopMetric[] {
       { label: "지상풍", value: `${data.surfaceWindMs}m/s`, helper: data.windDirection, icon: Wind },
       { label: "상층풍", value: `${data.upperWindSpeedMs}m/s`, helper: data.upperWindDirection, icon: Wind },
       { label: "월광", value: `${data.moonlightPercent}%`, helper: `${data.moonrise}/${data.moonset}`, icon: Moon },
+      { label: "BMNT", value: data.bmnt, helper: "아침박명", icon: Moon },
+      { label: "EENT", value: data.eent, helper: "저녁박명", icon: Moon },
       { label: "시정", value: `${data.visibilityKm}km`, helper: "가시거리", icon: Eye },
       { label: "간조", value: data.lowTide, helper: "1차/2차", icon: Activity },
       { label: "만조", value: data.highTide, helper: "1차/2차", icon: Activity },
@@ -329,6 +440,9 @@ function desktopMetrics(operation: TheOneOperation): DesktopMetric[] {
       { label: "강수", value: `${data.precipitationProbability}%`, helper: `${data.precipitationMm}mm`, icon: Cloud },
       { label: "지상풍", value: `${data.surfaceWindMs}m/s`, helper: data.windDirection, icon: Wind },
       { label: "상층풍", value: `${data.upperWindSpeedMs}m/s`, helper: data.upperWindDirection, icon: Wind },
+      { label: "월광", value: `${data.moonlightPercent}%`, helper: `${data.moonrise}/${data.moonset}`, icon: Moon },
+      { label: "BMNT", value: data.bmnt, helper: "아침박명", icon: Moon },
+      { label: "EENT", value: data.eent, helper: "저녁박명", icon: Moon },
       { label: "시정", value: `${data.visibilityKm}km`, helper: data.fog, icon: Eye },
       { label: "WBGT", value: `${data.wbgtC}℃`, helper: "온열지수", icon: Thermometer },
     ];
@@ -341,6 +455,8 @@ function desktopMetrics(operation: TheOneOperation): DesktopMetric[] {
       { label: "평균풍", value: `${data.windSpeedMs}m/s`, helper: data.windDirection, icon: Wind },
       { label: "순간풍", value: `${data.gustSpeedMs}m/s`, helper: "돌풍", icon: Wind },
       { label: "시정", value: `${data.visibilityKm}km`, helper: "영상판독", icon: Eye },
+      { label: "BMNT", value: data.bmnt, helper: "아침박명", icon: Moon },
+      { label: "EENT", value: data.eent, helper: "저녁박명", icon: Moon },
       { label: "운고", value: `${data.cloudCeilingFt}ft`, helper: "저고도", icon: Cloud },
       { label: "난류", value: data.turbulenceRisk, helper: "항로안정", icon: Activity },
       { label: "습도", value: `${data.humidityPercent}%`, helper: `이슬점 ${data.dewPointC}℃`, icon: Activity },
@@ -459,7 +575,7 @@ function useKstClock() {
 export function DesktopCommandApp() {
   const { catalog, alerts } = useDesktopData();
   const clock = useKstClock();
-  const [activeMenu, setActiveMenu] = useState<DesktopMenu>("live");
+  const [activeMenu, setActiveMenu] = useState<DesktopMenu>("region");
   const [activeType, setActiveType] = useState<OperationType>("coastal");
   const [selectedIds, setSelectedIds] = useState<string[]>(defaultOperations.map((operation) => operation.id));
   const [selectedId, setSelectedId] = useState(defaultOperations[0]?.id ?? "");
@@ -536,8 +652,8 @@ export function DesktopCommandApp() {
         </div>
         <div className="desktop-clock">
           <span>KST</span>
-          <strong>{clock.time}</strong>
-          <em>{clock.date}</em>
+          <strong suppressHydrationWarning>{clock.time}</strong>
+          <em suppressHydrationWarning>{clock.date}</em>
         </div>
         <nav className="desktop-menu" aria-label="데스크톱 메뉴">
           {MENUS.map((item) => {
@@ -566,6 +682,17 @@ export function DesktopCommandApp() {
         </aside>
       </aside>
       <main className="desktop-main">
+        {activeMenu === "region" && (
+          <OperationRegionStatus
+            activeType={activeType}
+            operations={activeOperations}
+            allSelectedOperations={selectedOperations}
+            selectedOperation={selectedOperation}
+            alerts={alerts}
+            onTypeChange={handleTypeChange}
+            onSelect={(operation) => setSelectedId(operation.id)}
+          />
+        )}
         {activeMenu === "weather" && <WeatherAnalysisSheet operations={selectedOperations} />}
         {activeMenu === "access" && <AccessAssessmentSheet operations={selectedOperations} />}
         {activeMenu === "live" && (
@@ -657,6 +784,229 @@ function OperationRail({
   );
 }
 
+function OperationRegionStatus({
+  activeType,
+  operations,
+  allSelectedOperations,
+  selectedOperation,
+  alerts,
+  onTypeChange,
+  onSelect,
+}: {
+  activeType: OperationType;
+  operations: TheOneOperation[];
+  allSelectedOperations: TheOneOperation[];
+  selectedOperation?: TheOneOperation;
+  alerts: LiveAlert[];
+  onTypeChange: (type: OperationType) => void;
+  onSelect: (operation: TheOneOperation) => void;
+}) {
+  const [popupId, setPopupId] = useState<string | null>(selectedOperation?.id ?? null);
+  const mapOperations = operations.length > 0 ? operations : allSelectedOperations;
+  const popupOperation = mapOperations.find((operation) => operation.id === popupId) ?? selectedOperation ?? mapOperations[0];
+
+  return (
+    <section className="desktop-region-grid">
+      <div className="desktop-live-left">
+        <DesktopTypeSwitch activeType={activeType} onTypeChange={onTypeChange} />
+        <OperationRail operations={operations} selectedId={selectedOperation?.id} onSelect={(operation) => {
+          setPopupId(operation.id);
+          onSelect(operation);
+        }} />
+      </div>
+      <div className="desktop-vworld-panel">
+        <VworldMap
+          operations={mapOperations}
+          selectedOperation={popupOperation}
+          alerts={alerts}
+          onSelect={(operation) => {
+            setPopupId(operation.id);
+            onSelect(operation);
+          }}
+        />
+      </div>
+      <aside className="desktop-region-side">
+        <OperationPopup operation={popupOperation} alerts={alerts} />
+        <ApiPreparationPanel />
+      </aside>
+    </section>
+  );
+}
+
+function VworldMap({
+  operations,
+  selectedOperation,
+  alerts,
+  onSelect,
+}: {
+  operations: TheOneOperation[];
+  selectedOperation?: TheOneOperation;
+  alerts: LiveAlert[];
+  onSelect: (operation: TheOneOperation) => void;
+}) {
+  const zoom = selectedOperation?.type === "air" ? 8 : 9;
+  const center = mapCenter(operations, selectedOperation);
+  const centerPixel = mercatorPixel(center[0], center[1], zoom);
+  const centerTile = { x: Math.floor(centerPixel.x / 256), y: Math.floor(centerPixel.y / 256) };
+  const tiles = Array.from({ length: 5 }, (_, row) => (
+    Array.from({ length: 5 }, (__, col) => ({
+      x: centerTile.x + col - 2,
+      y: centerTile.y + row - 2,
+    }))
+  )).flat();
+
+  return (
+    <section className="desktop-vworld-map">
+      <div className="desktop-vworld-tiles" aria-hidden="true">
+        {tiles.map((tile) => (
+          <img
+            key={`${tile.x}-${tile.y}`}
+            src={vworldTileUrl(tile.x, tile.y, zoom)}
+            alt=""
+            style={{
+              left: `calc(50% + ${tile.x * 256 - centerPixel.x}px)`,
+              top: `calc(50% + ${tile.y * 256 - centerPixel.y}px)`,
+            }}
+          />
+        ))}
+      </div>
+      <div className="desktop-vworld-shade" />
+      {operations.map((operation) => {
+        if (!operation.center) return null;
+        const point = mercatorPixel(operation.center[0], operation.center[1], zoom);
+        const active = selectedOperation?.id === operation.id;
+        const markerAlerts = alertsForOperation(alerts, operation);
+
+        return (
+          <button
+            key={operation.id}
+            type="button"
+            className={cx("desktop-map-marker", `is-${operation.type}`, active && "is-active", markerAlerts.length > 0 && "has-alert")}
+            style={{
+              left: `calc(50% + ${point.x - centerPixel.x}px)`,
+              top: `calc(50% + ${point.y - centerPixel.y}px)`,
+            }}
+            onClick={() => onSelect(operation)}
+          >
+            <span>{weatherEmoji(operation, alerts)}</span>
+            <strong>{displayRegionName(operation)}</strong>
+          </button>
+        );
+      })}
+      <div className="desktop-vworld-badge">
+        <strong>VWorld</strong>
+        <span>선택 지역 {operations.length}개</span>
+      </div>
+    </section>
+  );
+}
+
+function OperationPopup({ operation, alerts }: { operation?: TheOneOperation; alerts: LiveAlert[] }) {
+  if (!operation) {
+    return (
+      <section className="desktop-panel desktop-region-popup">
+        <h2>지역 정보</h2>
+        <p>사용자 설정에서 작전지역을 선택하세요.</p>
+      </section>
+    );
+  }
+
+  const metrics = desktopMetrics(operation).slice(0, 10);
+  const astro = operationAstronomy(operation);
+  const phase = astronomyPhase(operation);
+  const activeAlerts = alertsForOperation(alerts, operation);
+
+  return (
+    <section className="desktop-panel desktop-region-popup">
+      <header>
+        <span>{operationConfigs[operation.type].title}</span>
+        <h2>{operation.name}</h2>
+        <em>{operation.datetime}</em>
+      </header>
+      <div className="desktop-region-status-row">
+        <b>{weatherEmoji(operation, alerts)}</b>
+        <strong>{statusText(operation)}</strong>
+        <span>{activeAlerts.length > 0 ? `특보 ${activeAlerts.length}건` : "특보 없음"}</span>
+      </div>
+      {astro && (
+        <div className="desktop-astro-card">
+          <b>{phase.emoji}</b>
+          <div>
+            <strong>{phase.label}</strong>
+            <span>{phase.detail}</span>
+          </div>
+          <em>BMNT {astro.bmnt} · EENT {astro.eent}</em>
+        </div>
+      )}
+      <div className="desktop-region-metric-list">
+        {metrics.map((metric) => (
+          <article key={metric.label}>
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+            <em>{metric.helper}</em>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ApiPreparationPanel() {
+  return (
+    <section className="desktop-panel desktop-api-panel">
+      <h2>API 연결 준비</h2>
+      <div>
+        <strong>실시간</strong>
+        <span>기온 · 습도 · 강수 · 지상풍 · 기상특보 · CCTV</span>
+      </div>
+      <div>
+        <strong>주기 갱신</strong>
+        <span>조석 · 일출/일몰 · 월출/월몰 · 월광 · 대기질</span>
+      </div>
+      <div>
+        <strong>추가 키 필요</strong>
+        <span>기상자료개방포털 CCTV/영상 · ASOS/AWS 시정 · 고층/항공기상 · 레이더/낙뢰</span>
+      </div>
+    </section>
+  );
+}
+
+function AstronomyOverview({ operation }: { operation: TheOneOperation }) {
+  const astro = operationAstronomy(operation);
+  if (!astro) return null;
+  const phase = astronomyPhase(operation);
+  const weather = weatherLabel(operation);
+
+  return (
+    <section className="desktop-astro-overview">
+      <article className="is-phase">
+        <b>{phase.emoji}</b>
+        <span>현재 시간대</span>
+        <strong>{phase.label}</strong>
+        <em>{phase.detail}</em>
+      </article>
+      <article>
+        <b>{weather.includes("흐림") ? "☁" : weather.includes("비") ? "🌧" : "☀"}</b>
+        <span>일출 / 일몰</span>
+        <strong>{astro.sunrise} / {astro.sunset}</strong>
+        <em>주간 식별 기준</em>
+      </article>
+      <article>
+        <b>🌗</b>
+        <span>월출 / 월몰</span>
+        <strong>{astro.moonrise} / {astro.moonset}</strong>
+        <em>월광 {astro.moonlightPercent}%</em>
+      </article>
+      <article>
+        <b>◐</b>
+        <span>BMNT / EENT</span>
+        <strong>{astro.bmnt} / {astro.eent}</strong>
+        <em>박명 시간</em>
+      </article>
+    </section>
+  );
+}
+
 function LiveSituation({
   activeType,
   operations,
@@ -691,6 +1041,7 @@ function LiveSituation({
               </div>
               <strong>{statusText(selectedOperation)}</strong>
             </section>
+            <AstronomyOverview operation={selectedOperation} />
             <section className="desktop-metric-grid">
               {metrics.map((metric) => {
                 const Icon = metric.icon;
@@ -996,57 +1347,57 @@ function AccessAssessmentSheet({ operations }: { operations: TheOneOperation[] }
 
 function AssessmentBlock({ title, rows }: { title: string; rows: TheOneOperation[] }) {
   return (
-    <div className="desktop-table-scroll">
-      <table className="desktop-assessment-table">
-        <thead>
-          <tr>
-            <th rowSpan={2}>구분</th>
-            <th colSpan={2}>기상</th>
-            <th colSpan={2}>해상</th>
-            <th colSpan={3}>지역</th>
-            <th colSpan={2}>환경조건</th>
-            <th rowSpan={2}>종합평가</th>
-          </tr>
-          <tr>
-            <th>개황</th>
-            <th>기상특보</th>
-            <th>앞바다</th>
-            <th>먼바다</th>
-            <th>물때</th>
-            <th>조류</th>
-            <th>수온</th>
-            <th>취약시기</th>
-            <th>시정조건</th>
-          </tr>
-          <tr className="desktop-section-row">
-            <th colSpan={11}>{title}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((operation) => {
-            const data = operation.coastal;
-            const weather = operation.coastalEnvironment?.weatherStatus ?? "맑음";
-            if (!data) return null;
+    <section className="desktop-assessment-block">
+      <h2>{title}</h2>
+      <div className="desktop-table-scroll">
+        <table className="desktop-assessment-table">
+          <thead>
+            <tr>
+              <th rowSpan={2}>구분</th>
+              <th colSpan={2}>기상</th>
+              <th colSpan={2}>해상</th>
+              <th colSpan={3}>지역</th>
+              <th colSpan={2}>환경조건</th>
+              <th rowSpan={2}>종합평가</th>
+            </tr>
+            <tr>
+              <th>개황</th>
+              <th>기상특보</th>
+              <th>앞바다</th>
+              <th>먼바다</th>
+              <th>물때</th>
+              <th>조류</th>
+              <th>수온</th>
+              <th>취약시기</th>
+              <th>시정조건</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((operation) => {
+              const data = operation.coastal;
+              const weather = operation.coastalEnvironment?.weatherStatus ?? "맑음";
+              if (!data) return null;
 
-            return (
-              <tr key={`${title}-${operation.id}`}>
-                <th>{cleanName(operation)}</th>
-                <td>{weather}</td>
-                <td>{data.weatherAlert}</td>
-                <td>{data.nearshoreWaveHeightM}m</td>
-                <td>{data.offshoreWaveHeightM}m</td>
-                <td>{data.tideAge}</td>
-                <td>{data.currentDirection} {data.currentSpeedKt}kt</td>
-                <td>{data.waterTempC}℃</td>
-                <td>{data.currentTime}</td>
-                <td>{data.visibilityKm}km</td>
-                <td><span className={cx("desktop-judge", statusText(operation).includes("주의") || statusText(operation).includes("저시정") ? "is-watch" : "")}>{statusText(operation)}</span></td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+              return (
+                <tr key={`${title}-${operation.id}`}>
+                  <th>{cleanName(operation)}</th>
+                  <td>{weather}</td>
+                  <td>{data.weatherAlert}</td>
+                  <td>{data.nearshoreWaveHeightM}m</td>
+                  <td>{data.offshoreWaveHeightM}m</td>
+                  <td>{data.tideAge}</td>
+                  <td>{data.currentDirection} {data.currentSpeedKt}kt</td>
+                  <td>{data.waterTempC}℃</td>
+                  <td>{data.currentTime}</td>
+                  <td>{data.visibilityKm}km</td>
+                  <td><span className={cx("desktop-judge", statusText(operation).includes("주의") || statusText(operation).includes("저시정") ? "is-watch" : "")}>{statusText(operation)}</span></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

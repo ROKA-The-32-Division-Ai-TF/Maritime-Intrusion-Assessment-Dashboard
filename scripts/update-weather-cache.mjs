@@ -707,6 +707,7 @@ async function buildOperationUpdate(target) {
         temperatureC: kmaValues.temperatureC,
         precipitationProbability: kmaValues.precipitationProbability,
         precipitationMm: kmaValues.precipitationMm,
+        ...(riseSet?.values ?? {}),
         windSpeedMs: kmaValues.windSpeedMs,
         windDirection: kmaValues.windDirection,
         visibilityKm: kmaValues.visibilityKm,
