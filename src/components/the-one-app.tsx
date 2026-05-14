@@ -83,7 +83,7 @@ type WeatherCachePayload = {
 
 const KMA_WEATHER_MAP_URL = "https://www.weather.go.kr/wgis-nuri/html/map.html#";
 const KMA_MARINE_MAP_URL = "https://marine.kma.go.kr/mmis/?menuId=sig_wh";
-const ALERT_HISTORY_STORAGE_KEY = "baekryong-the-one-alert-history-v1";
+const ALERT_HISTORY_STORAGE_KEY = "baekryong-the-one-alert-history-v2";
 
 const OPERATION_TYPES: OperationType[] = ["coastal", "ground", "air"];
 const STORAGE_KEY = "baekryong-the-one-operations-v4";
@@ -468,6 +468,7 @@ function alertMatchesOperation(alert: LiveAlert, activeType: OperationType, oper
   if (!operation) return alert.type !== "system";
   if (alert.targetIds?.includes(operation.id)) return true;
   if (alert.targetIds && alert.targetIds.length > 0) return false;
+  if (alert.type === "system") return false;
 
   const alertText = normalizeAlertMatchText([
     alert.title,
@@ -478,7 +479,6 @@ function alertMatchesOperation(alert: LiveAlert, activeType: OperationType, oper
   ].join(" "));
   const hasRegionMatch = alertKeywordsForOperation(operation).some((keyword) => alertText.includes(keyword));
 
-  if (alert.type === "system") return hasRegionMatch;
   return hasRegionMatch || !alert.regionText;
 }
 

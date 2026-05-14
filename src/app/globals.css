@@ -2207,27 +2207,27 @@ button.metric-card {
 }
 
 .desktop-app {
-  --desktop-bg: #f4f7fb;
-  --desktop-panel: #ffffff;
+  --desktop-bg: #122246;
+  --desktop-panel: rgba(255, 255, 255, 0.94);
   --desktop-ink: #111827;
-  --desktop-muted: #6b7280;
-  --desktop-line: #d8e1f0;
+  --desktop-muted: #68748a;
+  --desktop-line: rgba(209, 222, 242, 0.88);
   --desktop-blue: #254aa5;
   --desktop-blue-soft: #e9f0ff;
   min-height: 100dvh;
   width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns: 276px minmax(0, 1fr);
+  grid-template-columns: 348px minmax(0, 1fr);
   color: var(--desktop-ink);
   background:
-    radial-gradient(circle at 86% -10%, rgba(37, 74, 165, 0.16), transparent 34%),
-    linear-gradient(180deg, #f8fbff, var(--desktop-bg));
+    radial-gradient(circle at 88% 0%, rgba(89, 132, 225, 0.42), transparent 34%),
+    linear-gradient(135deg, #3f3d47 0%, #2e4279 48%, #254aa5 100%);
 }
 
 body:has(.desktop-app) {
   padding: 0;
-  background: #f4f7fb;
+  background: #16223f;
 }
 
 .desktop-app button {
@@ -2238,80 +2238,111 @@ body:has(.desktop-app) {
   position: sticky;
   top: 0;
   height: 100dvh;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 18px;
-  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 30px;
   background:
-    radial-gradient(circle at 0% 0%, rgba(127, 184, 255, 0.2), transparent 36%),
-    linear-gradient(180deg, #12295f, #071832);
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05), transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(0deg, rgba(255, 255, 255, 0.04), transparent 1px) 0 0 / 44px 44px,
+    radial-gradient(circle at 8% 12%, rgba(150, 185, 255, 0.18), transparent 34%),
+    linear-gradient(180deg, rgba(12, 26, 60, 0.96), rgba(7, 18, 42, 0.9));
   color: white;
 }
 
 .desktop-brand {
   display: grid;
-  grid-template-columns: 54px 1fr;
-  gap: 12px;
+  grid-template-columns: 42px 1fr;
+  gap: 13px;
   align-items: center;
 }
 
 .desktop-brand img {
-  width: 54px;
-  height: 54px;
+  width: 42px;
+  height: 42px;
   object-fit: contain;
 }
 
 .desktop-brand span,
-.desktop-brand strong {
+.desktop-brand strong,
+.desktop-brand em {
   display: block;
 }
 
 .desktop-brand span {
-  color: #a9c7ff;
-  font-size: 12px;
+  color: rgba(229, 238, 255, 0.86);
+  font-size: 14px;
   font-weight: 950;
 }
 
 .desktop-brand strong {
-  margin-top: 3px;
-  font-size: 19px;
+  margin-top: 18px;
+  max-width: 270px;
+  color: white;
+  font-size: clamp(32px, 2.6vw, 46px);
   line-height: 1.18;
   font-weight: 950;
 }
 
+.desktop-brand em {
+  max-width: 280px;
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 18px;
+  line-height: 1.25;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .desktop-menu {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
-  gap: 10px;
+  gap: 12px;
+  margin-top: auto;
 }
 
 .desktop-menu button,
 .desktop-sidebar-status {
-  min-height: 54px;
+  min-height: 132px;
   display: grid;
-  grid-template-columns: 28px 1fr;
+  grid-template-columns: 1fr;
+  align-content: center;
   align-items: center;
-  gap: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.055);
-  color: rgba(255, 255, 255, 0.82);
-  padding: 0 14px;
-  text-align: left;
+  justify-items: center;
+  gap: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.075);
+  color: rgba(255, 255, 255, 0.88);
+  padding: 18px 12px;
+  text-align: center;
   font-size: 15px;
   font-weight: 900;
+  backdrop-filter: blur(14px);
+}
+
+.desktop-menu svg {
+  width: 42px;
+  height: 42px;
+  stroke-width: 1.8;
 }
 
 .desktop-menu button.is-active {
-  border-color: rgba(127, 184, 255, 0.62);
-  background: linear-gradient(135deg, rgba(37, 74, 165, 0.92), rgba(93, 150, 255, 0.7));
+  border-color: rgba(255, 255, 255, 0.64);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.22), rgba(70, 113, 205, 0.6));
   color: white;
-  box-shadow: 0 18px 44px rgba(37, 74, 165, 0.3);
+  box-shadow: 0 22px 52px rgba(2, 14, 35, 0.32);
 }
 
 .desktop-sidebar-status {
+  min-height: 54px;
+  grid-template-columns: 24px 1fr;
+  justify-items: start;
+  margin-top: 2px;
   color: #dbe8ff;
   font-size: 13px;
+  text-align: left;
 }
 
 .desktop-main {
@@ -2319,23 +2350,27 @@ body:has(.desktop-app) {
   width: 100%;
   display: grid;
   grid-template-rows: auto 1fr;
-  gap: 18px;
-  padding: 22px;
+  gap: 16px;
+  padding: 24px;
   overflow-x: clip;
 }
 
 .desktop-topbar {
-  min-height: 74px;
+  min-height: 70px;
   display: grid;
   grid-template-columns: 48px 1fr 54px;
   align-items: center;
   gap: 14px;
-  padding: 0 18px;
-  border: 1px solid var(--desktop-line);
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.23);
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 18px 48px rgba(21, 35, 62, 0.08);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 18px 48px rgba(5, 16, 38, 0.16);
   backdrop-filter: blur(16px);
+}
+
+.desktop-topbar.is-sheet {
+  min-height: 60px;
 }
 
 .desktop-topbar button {
@@ -2343,8 +2378,8 @@ body:has(.desktop-app) {
   height: 46px;
   border: 0;
   border-radius: 15px;
-  background: var(--desktop-blue-soft);
-  color: var(--desktop-blue);
+  background: rgba(255, 255, 255, 0.16);
+  color: white;
 }
 
 .desktop-topbar strong,
@@ -2356,21 +2391,21 @@ body:has(.desktop-app) {
 }
 
 .desktop-topbar strong {
-  color: var(--desktop-blue);
-  font-size: 25px;
+  color: white;
+  font-size: clamp(20px, 1.8vw, 28px);
   font-weight: 950;
 }
 
 .desktop-topbar span {
   margin-top: 4px;
-  color: var(--desktop-muted);
+  color: rgba(255, 255, 255, 0.72);
   font-size: 13px;
   font-weight: 850;
 }
 
 .desktop-topbar img {
-  width: 50px;
-  height: 50px;
+  width: 46px;
+  height: 46px;
   justify-self: end;
   object-fit: contain;
 }
@@ -2379,7 +2414,7 @@ body:has(.desktop-app) {
   min-height: 0;
   width: 100%;
   display: grid;
-  grid-template-columns: 260px minmax(520px, 1fr) 320px;
+  grid-template-columns: 250px minmax(520px, 1fr) 310px;
   gap: 16px;
 }
 
@@ -2400,7 +2435,7 @@ body:has(.desktop-app) {
 
 .desktop-live-left,
 .desktop-live-right {
-  max-height: calc(100dvh - 136px);
+  max-height: calc(100dvh - 126px);
   overflow-y: auto;
   padding-right: 2px;
 }
@@ -2483,9 +2518,9 @@ body:has(.desktop-app) {
 .desktop-empty,
 .desktop-catalog-panel {
   border: 1px solid var(--desktop-line);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 18px 48px rgba(21, 35, 62, 0.08);
+  border-radius: 22px;
+  background: var(--desktop-panel);
+  box-shadow: 0 18px 48px rgba(5, 16, 38, 0.18);
 }
 
 .desktop-focus-card {
@@ -2612,7 +2647,7 @@ body:has(.desktop-app) {
 .desktop-panel h2 {
   margin: 0;
   color: var(--desktop-blue);
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 950;
 }
 
@@ -2683,8 +2718,10 @@ body:has(.desktop-app) {
 .desktop-sheet {
   min-height: 0;
   display: grid;
-  gap: 18px;
-  padding: 20px;
+  max-height: calc(100dvh - 126px);
+  gap: 14px;
+  overflow: hidden;
+  padding: 18px;
 }
 
 .desktop-sheet-head {
@@ -2697,7 +2734,7 @@ body:has(.desktop-app) {
 .desktop-sheet-head h1 {
   margin: 0;
   color: var(--desktop-blue);
-  font-size: clamp(32px, 4vw, 52px);
+  font-size: clamp(26px, 3vw, 42px);
   line-height: 1.05;
   text-align: center;
   font-weight: 950;
@@ -2715,16 +2752,17 @@ body:has(.desktop-app) {
 }
 
 .desktop-table-scroll {
+  min-height: 0;
   overflow: auto;
-  border: 2px solid #111827;
-  border-radius: 12px;
+  border: 1px solid #182033;
+  border-radius: 16px;
   background: white;
 }
 
 .desktop-analysis-table,
 .desktop-assessment-table {
   width: 100%;
-  min-width: 1120px;
+  min-width: 1080px;
   border-collapse: collapse;
   color: #0d1320;
   background: white;
@@ -2734,22 +2772,22 @@ body:has(.desktop-app) {
 .desktop-analysis-table td,
 .desktop-assessment-table th,
 .desktop-assessment-table td {
-  min-width: 94px;
-  height: 58px;
-  border: 2px solid #111827;
-  padding: 8px 10px;
+  min-width: 88px;
+  height: 50px;
+  border: 1px solid #182033;
+  padding: 7px 8px;
   text-align: center;
   vertical-align: middle;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 850;
   white-space: nowrap;
 }
 
 .desktop-analysis-table thead th,
 .desktop-assessment-table thead th {
-  background: #cfe3ff;
+  background: #d7e8ff;
   color: #07111f;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 950;
 }
 
@@ -2761,9 +2799,9 @@ body:has(.desktop-app) {
 }
 
 .desktop-section-row th {
-  height: 48px;
-  background: #bcd8ff !important;
-  font-size: 18px !important;
+  height: 42px;
+  background: #c8ddff !important;
+  font-size: 16px !important;
 }
 
 .desktop-judge {
@@ -2922,9 +2960,13 @@ body:has(.desktop-app) {
 }
 
 @media (max-width: 1500px) {
+  .desktop-app {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+
   .desktop-live-grid {
-    grid-template-columns: 240px minmax(420px, 1fr) 280px;
-    gap: 12px;
+    grid-template-columns: 220px minmax(340px, 1fr) 250px;
+    gap: 10px;
   }
 
   .desktop-settings-grid {
@@ -2933,13 +2975,50 @@ body:has(.desktop-app) {
   }
 
   .desktop-main {
-    padding: 20px;
+    padding: 16px;
+  }
+
+  .desktop-metric-grid {
+    gap: 8px;
+  }
+
+  .desktop-metric-grid article {
+    padding: 12px;
   }
 }
 
 @media (max-width: 1180px) {
   .desktop-app {
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: 1fr;
+  }
+
+  .desktop-sidebar {
+    position: static;
+    height: auto;
+    padding: 20px;
+  }
+
+  .desktop-brand {
+    grid-template-columns: 40px 1fr;
+  }
+
+  .desktop-brand strong {
+    max-width: none;
+    margin-top: 2px;
+    font-size: 24px;
+  }
+
+  .desktop-brand em {
+    display: none;
+  }
+
+  .desktop-menu {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-top: 0;
+  }
+
+  .desktop-menu button {
+    min-height: 84px;
   }
 
   .desktop-live-grid,
@@ -2964,14 +3043,8 @@ body:has(.desktop-app) {
 }
 
 @media (max-width: 820px) {
-  .desktop-app {
-    grid-template-columns: 1fr;
-  }
-
   .desktop-sidebar {
-    position: static;
-    height: auto;
-    grid-template-rows: auto auto;
+    padding: 16px;
   }
 
   .desktop-sidebar-status {
@@ -2980,6 +3053,10 @@ body:has(.desktop-app) {
 
   .desktop-menu {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .desktop-menu button {
+    min-height: 76px;
   }
 
   .desktop-main {

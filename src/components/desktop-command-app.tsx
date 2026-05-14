@@ -56,7 +56,7 @@ const DESKTOP_SELECTION_KEY = "baekryong-desktop-selection-v1";
 const DESKTOP_TYPE_KEY = "baekryong-desktop-type-v1";
 const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
   { id: "weather", label: "기상분석표", icon: CalendarDays },
-  { id: "access", label: "밀입국판단표", icon: ListChecks },
+  { id: "access", label: "밀입국 가능성", icon: ListChecks },
   { id: "live", label: "실시간 상황", icon: MapIcon },
   { id: "settings", label: "사용자 설정", icon: Settings },
 ];
@@ -93,6 +93,7 @@ function alertMatchesOperation(alert: LiveAlert, activeType: OperationType, oper
   if (!operation) return alert.type !== "system";
   if (alert.targetIds?.includes(operation.id)) return true;
   if (alert.targetIds && alert.targetIds.length > 0) return false;
+  if (alert.type === "system") return false;
 
   const alertText = normalizeAlertMatchText([
     alert.title,
@@ -102,7 +103,6 @@ function alertMatchesOperation(alert: LiveAlert, activeType: OperationType, oper
     ...(alert.regions ?? []),
   ].join(" "));
 
-  if (alert.type === "system") return alertKeywordsForOperation(operation).some((keyword) => alertText.includes(keyword));
   return !alert.regionText || alertKeywordsForOperation(operation).some((keyword) => alertText.includes(keyword));
 }
 
@@ -400,6 +400,11 @@ export function DesktopCommandApp() {
     () => filterAlertsForOperation(alerts, activeType, selectedOperation),
     [activeType, alerts, selectedOperation],
   );
+  const activeMenuLabel = MENUS.find((menu) => menu.id === activeMenu)?.label ?? "";
+  const topbarTitle = activeMenu === "weather" || activeMenu === "access" ? "백룡 작전기상 분석체계" : activeMenuLabel;
+  const topbarSubTitle = activeMenu === "weather" || activeMenu === "access"
+    ? "Baekryong Operational Weather Analysis System"
+    : "제32보병사단 AI TF";
 
   function handleTypeChange(type: OperationType) {
     const first = selectedOperations.find((operation) => operation.type === type) ?? catalog.find((operation) => operation.type === type);
@@ -425,8 +430,9 @@ export function DesktopCommandApp() {
         <div className="desktop-brand">
           <img src={assetUrl("22.svg")} alt="" />
           <div>
-            <span>백룡</span>
-            <strong>작전기상 판단체계</strong>
+            <span>제32보병사단</span>
+            <strong>백룡 작전기상 분석체계</strong>
+            <em>Baekryong Operational Weather Analysis System</em>
           </div>
         </div>
         <nav className="desktop-menu" aria-label="데스크톱 메뉴">
@@ -446,13 +452,13 @@ export function DesktopCommandApp() {
         </div>
       </aside>
       <main className="desktop-main">
-        <header className="desktop-topbar">
+        <header className={cx("desktop-topbar", (activeMenu === "weather" || activeMenu === "access") && "is-sheet")}>
           <button type="button" aria-label="메뉴">
             <Menu size={21} />
           </button>
           <div>
-            <strong>{MENUS.find((menu) => menu.id === activeMenu)?.label}</strong>
-            <span>{new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul", hour12: false })}</span>
+            <strong>{topbarTitle}</strong>
+            <span>{topbarSubTitle} · {new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul", hour12: false })}</span>
           </div>
           <img src={assetUrl("22.svg")} alt="" />
         </header>
