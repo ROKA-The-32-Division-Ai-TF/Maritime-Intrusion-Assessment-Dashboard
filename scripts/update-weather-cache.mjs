@@ -7,6 +7,7 @@ const outputPath = join(rootDir, "public", "data", "weather-cache.json");
 const KMA_NCST_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst";
 const KMA_FCST_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst";
 const KMA_WARNING_URL = "http://apis.data.go.kr/1360000/WthrWrnInfoService/getWthrWrnList";
+const KMA_WARNING_MSG_URL = "http://apis.data.go.kr/1360000/WthrWrnInfoService/getWthrWrnMsg";
 const AIRKOREA_URL = "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty";
 const KASI_RISE_SET_URL = "https://apis.data.go.kr/B090041/openapi/service/RiseSetInfoService/getAreaRiseSetInfo";
 const KHOA_TIDE_URL = "https://khoa.go.kr/oceandata/odmiapi/GetTideFcstHghLwApiService.do";
@@ -42,7 +43,7 @@ function apiKey(name) {
   }
 }
 
-function alert(id, type, level, title, message, source, timestamp = new Date().toISOString()) {
+function alert(id, type, level, title, message, source, timestamp = new Date().toISOString(), meta = {}) {
   return {
     id,
     type,
@@ -51,6 +52,7 @@ function alert(id, type, level, title, message, source, timestamp = new Date().t
     message,
     source,
     timestamp,
+    ...meta,
   };
 }
 
@@ -168,6 +170,169 @@ function publicDataItems(json) {
   const item = items?.item;
   if (!item) return [];
   return Array.isArray(item) ? item : [item];
+}
+
+function unique(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function compactText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeForMatch(value) {
+  return String(value ?? "")
+    .replace(/[\s·ㆍ,./_()[\]{}-]/g, "")
+    .toLowerCase();
+}
+
+function warningKeywordsForTarget(target) {
+  const location = target.location ?? "";
+  const station = String(target.airStation ?? "").replace(/(시청사|읍|동|리)$/g, "");
+  const nameTokens = String(target.name ?? "")
+    .split(/[·\s]+/g)
+    .map((token) => token.replace(/(권역|일대|연안|기상|관측권|공역|회랑)$/g, ""));
+  const keywords = [
+    location,
+    station,
+    `${location}시`,
+    `${location}군`,
+    ...nameTokens,
+  ];
+
+  if (location === "대전") {
+    keywords.push("대전광역시", "대전");
+  }
+
+  if (target.type === "coastal" || ["서산", "당진", "태안", "보령"].includes(location)) {
+    keywords.push("서해중부해상", "서해중부앞바다", "서해중부먼바다");
+    if (["서산", "당진", "태안"].includes(location)) keywords.push("충남북부앞바다");
+    if (location === "보령") keywords.push("충남남부앞바다");
+  }
+
+  return unique(keywords.map(compactText).filter((keyword) => keyword.length >= 2));
+}
+
+const warningTargetProfiles = operationTargets.map((target) => ({
+  target,
+  keywords: warningKeywordsForTarget(target),
+  normalizedKeywords: warningKeywordsForTarget(target).map(normalizeForMatch),
+}));
+
+function warningRecordText(...records) {
+  return records
+    .filter(Boolean)
+    .flatMap((record) =>
+      Object.entries(record)
+        .filter(([, value]) => ["string", "number"].includes(typeof value))
+        .map(([key, value]) => `${key}: ${value}`),
+    )
+    .join("\n");
+}
+
+function matchWarningTargets(text) {
+  const normalizedText = normalizeForMatch(text);
+
+  return warningTargetProfiles.filter((profile) =>
+    profile.normalizedKeywords.some((keyword) => keyword && normalizedText.includes(keyword)),
+  );
+}
+
+function looksLikeWarningRegion(value) {
+  const text = compactText(value);
+  if (!text || /없\s*음|없음/.test(text)) return false;
+  if (/[0-9]{4}년|\d{1,2}시|\d{2}분/.test(text)) return false;
+  return /[가-힣]/.test(text);
+}
+
+function extractWarningRegionText(text, matchedProfiles) {
+  const source = String(text ?? "");
+  const directPatterns = [
+    /(?:발효|해제|예비특보|특보)\s*(?:현황|지역|구역)\s*[:：]\s*([^\n]+)/,
+    /(?:해당|대상)\s*(?:지역|구역)\s*[:：]\s*([^\n]+)/,
+    /(?:o|○|ㆍ|-)\s*[^:\n]*(?:주의보|경보)\s*[:：]\s*([^\n]+)/,
+  ];
+
+  for (const pattern of directPatterns) {
+    const match = source.match(pattern);
+    if (match?.[1] && looksLikeWarningRegion(match[1])) return compactText(match[1]).slice(0, 90);
+  }
+
+  const warningAreaMatches = [...source.matchAll(/(?:주의보|경보|예비특보|해제|변경)[^:\n]*[:：]\s*([^\n]+)/g)]
+    .map((match) => compactText(match[1]))
+    .filter(looksLikeWarningRegion);
+  if (warningAreaMatches.length > 0) {
+    return warningAreaMatches[0].slice(0, 90);
+  }
+
+  const labels = unique(matchedProfiles.map(({ target }) => target.location).filter(Boolean));
+  return labels.length > 0 ? labels.join(" · ") : "";
+}
+
+async function fetchKmaWarningDetail(item, serviceKey) {
+  const tmFc = String(item.tmFc ?? "");
+  const tmSeq = String(item.tmSeq ?? "");
+  const stnId = String(item.stnId ?? "108");
+  if (!tmFc || !tmSeq) return null;
+
+  const json = await fetchJson(KMA_WARNING_MSG_URL, {
+    ServiceKey: serviceKey,
+    pageNo: 1,
+    numOfRows: 10,
+    dataType: "JSON",
+    stnId,
+    fromTmFc: tmFc.slice(0, 8),
+    toTmFc: ymd(kstNow()),
+    tmFc,
+    tmSeq,
+  });
+
+  return publicDataItems(json)[0] ?? null;
+}
+
+async function mapWithConcurrency(items, limit, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+function kmaWarningAlertFromItem(item, detail, index) {
+  const title = compactText(item.title ?? detail?.title ?? "기상특보");
+  if (!title) return null;
+
+  const text = warningRecordText(item, detail);
+  const matchedProfiles = matchWarningTargets(text);
+  const targetIds = unique(matchedProfiles.map(({ target }) => target.id));
+  const regions = unique(matchedProfiles.map(({ target }) => target.location).filter(Boolean));
+  const regionText = extractWarningRegionText(text, matchedProfiles);
+  const level = title.includes("경보") || title.includes("태풍") ? "warning" : "watch";
+  const regionPrefix = regionText ? `${regionText} · ` : "";
+
+  return alert(
+    `kma-warning-${item.tmFc ?? "latest"}-${item.tmSeq ?? index}-${item.stnId ?? "108"}`,
+    "system",
+    level,
+    "기상특보",
+    `${regionPrefix}${title}`,
+    regionText ? `기상청 · ${regionText}` : "기상청 기상특보",
+    kmaTimestamp(item.tmFc),
+    {
+      regions,
+      regionText,
+      targetIds,
+      rawTitle: title,
+    },
+  );
 }
 
 function compactItems(items) {
@@ -296,7 +461,7 @@ async function fetchKmaWarningAlerts() {
     const json = await fetchJson(KMA_WARNING_URL, {
       ServiceKey: serviceKey,
       pageNo: 1,
-      numOfRows: 12,
+      numOfRows: 50,
       dataType: "JSON",
       fromTmFc: ymd(kstNow(-72 * 60)),
       toTmFc: ymd(kstNow()),
@@ -308,23 +473,20 @@ async function fetchKmaWarningAlerts() {
       return resultCode === "03" ? [] : null;
     }
 
-    return publicDataItems(json)
+    const items = publicDataItems(json)
       .filter((item) => item.title)
-      .slice(0, 8)
-      .map((item, index) => {
-        const title = String(item.title);
-        const level = title.includes("경보") || title.includes("태풍") ? "warning" : "watch";
+      .slice(0, 50);
 
-        return alert(
-          `kma-warning-${item.tmFc ?? "latest"}-${item.tmSeq ?? index}`,
-          "system",
-          level,
-          "기상특보",
-          title,
-          "기상청 기상특보",
-          kmaTimestamp(item.tmFc),
-        );
-      });
+    const enrichedAlerts = await mapWithConcurrency(
+      items,
+      5,
+      async (item, index) => {
+        const detail = await fetchKmaWarningDetail(item, serviceKey).catch(() => null);
+        return kmaWarningAlertFromItem(item, detail, index);
+      },
+    );
+
+    return enrichedAlerts.filter(Boolean);
   } catch (error) {
     console.warn(`KMA warning failed: ${error instanceof Error ? error.message : error}`);
     return null;
@@ -590,22 +752,30 @@ function fallbackPayload() {
 
 function liveAlerts(updates, officialAlerts = []) {
   const alerts = [...officialAlerts];
+  const targetById = new Map(operationTargets.map((target) => [target.id, target]));
 
   updates.forEach((update) => {
     const wind = update.coastal?.windSpeedMs ?? update.ground?.windSpeedMs ?? update.air?.windSpeedMs;
     const visibility = update.coastal?.visibilityKm ?? update.ground?.visibilityKm ?? update.air?.visibilityKm;
     const alertType = update.type ?? "system";
+    const target = targetById.get(update.id);
+    const regionText = target?.location ?? update.name ?? "";
+    const meta = {
+      regions: regionText ? [regionText] : [],
+      regionText,
+      targetIds: update.id ? [update.id] : [],
+    };
 
     if (Number.isFinite(wind) && wind >= 10) {
-      alerts.push(alert(`${update.id}-wind`, alertType, "warning", "강풍성 변동", `${update.name ?? update.id} 풍속 ${wind}m/s 수준입니다.`, "기상청"));
+      alerts.push(alert(`${update.id}-wind`, alertType, "warning", "강풍성 변동", `${update.name ?? update.id} 풍속 ${wind}m/s 수준입니다.`, `기상청 · ${regionText || "선택지역"}`, new Date().toISOString(), meta));
     }
 
     if (Number.isFinite(visibility) && visibility <= 3) {
-      alerts.push(alert(`${update.id}-visibility`, alertType, "watch", "저시정 확인", `${update.name ?? update.id} 시정 ${visibility}km 수준입니다.`, "기상청"));
+      alerts.push(alert(`${update.id}-visibility`, alertType, "watch", "저시정 확인", `${update.name ?? update.id} 시정 ${visibility}km 수준입니다.`, `기상청 · ${regionText || "선택지역"}`, new Date().toISOString(), meta));
     }
   });
 
-  return alerts.slice(0, 12);
+  return alerts.slice(0, 60);
 }
 
 async function livePayload() {

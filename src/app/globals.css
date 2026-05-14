@@ -300,6 +300,12 @@ button {
   font-weight: 800;
 }
 
+.alert-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .alert-chip strong {
   overflow: hidden;
   color: white;
@@ -2658,6 +2664,13 @@ body:has(.desktop-app) {
   color: var(--desktop-ink);
   font-size: 13px;
   font-weight: 950;
+}
+
+.desktop-alert em {
+  color: #46627e;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
 }
 
 .desktop-alert span {

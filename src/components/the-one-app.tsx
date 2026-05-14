@@ -70,6 +70,10 @@ type LiveAlert = {
   message: string;
   source: string;
   timestamp: string;
+  regions?: string[];
+  regionText?: string;
+  targetIds?: string[];
+  rawTitle?: string;
 };
 type WeatherCachePayload = {
   generatedAt?: string;
@@ -439,61 +443,64 @@ function loadStoredOperations() {
   }
 }
 
-function fallbackLiveAlerts(activeType: OperationType): LiveAlert[] {
+function normalizeAlertMatchText(value: string) {
+  return value.replace(/[\s·ㆍ,./_()[\]{}-]/g, "").toLowerCase();
+}
+
+function alertKeywordsForOperation(operation: TheOneOperation) {
+  const baseText = `${operation.name} ${operation.area ?? ""}`;
+  const regionKeywords = ["서산", "당진", "태안", "보령", "공주", "대전", "충주"].filter((keyword) => baseText.includes(keyword));
+  const tokens = baseText
+    .split(/[·\s]+/g)
+    .map((token) => token.replace(/(권역|일대|연안|기상|관측권|공역|회랑|시|군)$/g, ""))
+    .filter((token) => token.length >= 2);
+  const seaKeywords = operation.type === "coastal" && regionKeywords.some((keyword) => ["서산", "당진", "태안", "보령"].includes(keyword))
+    ? ["서해중부", "서해중부앞바다", "서해중부먼바다", "충남북부앞바다", "충남남부앞바다"]
+    : [];
+
+  return [...new Set([...regionKeywords, ...tokens, ...seaKeywords])]
+    .map(normalizeAlertMatchText)
+    .filter((keyword) => keyword.length >= 2);
+}
+
+function alertMatchesOperation(alert: LiveAlert, activeType: OperationType, operation?: TheOneOperation) {
+  if (alert.type !== "system" && alert.type !== activeType) return false;
+  if (!operation) return alert.type !== "system";
+  if (alert.targetIds?.includes(operation.id)) return true;
+  if (alert.targetIds && alert.targetIds.length > 0) return false;
+
+  const alertText = normalizeAlertMatchText([
+    alert.title,
+    alert.message,
+    alert.source,
+    alert.regionText ?? "",
+    ...(alert.regions ?? []),
+  ].join(" "));
+  const hasRegionMatch = alertKeywordsForOperation(operation).some((keyword) => alertText.includes(keyword));
+
+  if (alert.type === "system") return hasRegionMatch;
+  return hasRegionMatch || !alert.regionText;
+}
+
+function filterAlertsForOperation(alerts: LiveAlert[], activeType: OperationType, operation?: TheOneOperation) {
+  return alerts.filter((alert) => alertMatchesOperation(alert, activeType, operation));
+}
+
+function fallbackLiveAlerts(activeType: OperationType, operation?: TheOneOperation): LiveAlert[] {
   const timestamp = new Date().toISOString();
-  const common: LiveAlert[] = [
+  const targetName = operation?.name ?? operationConfigs[activeType].title;
+
+  return [
     {
       id: `system-${activeType}`,
       type: "system",
       level: "info",
-      title: "기상특보 확인",
-      message: "현재 표시할 공식 특보가 없습니다.",
-      source: "기상청",
+      title: "기상특보",
+      message: `${targetName} 기준 현재 표시할 특보가 없습니다.`,
+      source: operation?.area ? `기상청 · ${operation.area}` : "기상청",
       timestamp,
+      targetIds: operation ? [operation.id] : [],
     },
-  ];
-
-  if (activeType === "coastal") {
-    return [
-      {
-        id: "coastal-watch-wave",
-        type: "coastal",
-        level: "watch",
-        title: "해상 변동 감시",
-        message: "파고·조석·시정 변동이 큰 항구는 실시간 탭에서 윈디와 기상청 지도를 함께 확인하세요.",
-        source: "해양기상",
-        timestamp,
-      },
-      ...common,
-    ];
-  }
-
-  if (activeType === "ground") {
-    return [
-      {
-        id: "ground-watch-heat",
-        type: "ground",
-        level: "watch",
-        title: "온열지수 확인",
-        message: "고온·고습 조건에서는 온열지수와 체감온도 카드를 우선 확인하세요.",
-        source: "육상기상",
-        timestamp,
-      },
-      ...common,
-    ];
-  }
-
-  return [
-    {
-      id: "air-watch-drone",
-      type: "air",
-      level: "watch",
-      title: "드론 운용 기상",
-      message: "돌풍·저시정·낙뢰 변동은 드론 운용 제한 요소로 실시간 확인이 필요합니다.",
-      source: "공중기상",
-      timestamp,
-    },
-    ...common,
   ];
 }
 
@@ -521,7 +528,7 @@ function mergeAlertHistory(current: LiveAlert[], incoming: LiveAlert[]) {
     .slice(0, 30);
 }
 
-function useLiveAlerts(activeType: OperationType) {
+function useLiveAlerts(activeType: OperationType, operation?: TheOneOperation) {
   const [alerts, setAlerts] = useState<LiveAlert[]>([]);
   const [history, setHistory] = useState<LiveAlert[]>([]);
 
@@ -533,18 +540,18 @@ function useLiveAlerts(activeType: OperationType) {
     let isActive = true;
 
     async function refreshAlerts() {
-      let nextAlerts = fallbackLiveAlerts(activeType);
+      let nextAlerts = fallbackLiveAlerts(activeType, operation);
 
       try {
         const response = await fetch(`${BASE_PATH}/data/weather-cache.json?ts=${Date.now()}`, { cache: "no-store" });
         if (response.ok) {
           const payload = (await response.json()) as WeatherCachePayload;
           const cachedAlerts = Array.isArray(payload.alerts) ? payload.alerts : [];
-          const filtered = cachedAlerts.filter((alert) => alert.type === "system" || alert.type === activeType);
+          const filtered = filterAlertsForOperation(cachedAlerts, activeType, operation);
           if (filtered.length > 0) nextAlerts = filtered;
         }
       } catch {
-        nextAlerts = fallbackLiveAlerts(activeType);
+        nextAlerts = fallbackLiveAlerts(activeType, operation);
       }
 
       if (!isActive) return;
@@ -564,7 +571,7 @@ function useLiveAlerts(activeType: OperationType) {
       isActive = false;
       window.clearInterval(timer);
     };
-  }, [activeType]);
+  }, [activeType, operation]);
 
   return { alerts, history };
 }
@@ -678,7 +685,7 @@ export function TheOneApp() {
           onMode={() => setView("mode")}
         />
       )}
-      {view !== "splash" && <LiveAlertTicker activeType={activeType} />}
+      {view !== "splash" && <LiveAlertTicker activeType={activeType} selectedOperation={selectedOperation} />}
       <main className={cx("one-main", view === "mode" && "is-centered", view === "splash" && "is-splash")}>
         {view === "splash" && <SplashScreen onEnter={() => setView("mode")} />}
         {view === "mode" && <ModeSelect activeType={activeType} onSelect={handleModeSelect} onSettings={() => setView("settings")} />}
@@ -764,10 +771,11 @@ function AppHeader({
   );
 }
 
-function LiveAlertTicker({ activeType }: { activeType: OperationType }) {
+function LiveAlertTicker({ activeType, selectedOperation }: { activeType: OperationType; selectedOperation?: TheOneOperation }) {
   const [isOpen, setIsOpen] = useState(false);
-  const { alerts, history } = useLiveAlerts(activeType);
-  const visibleAlerts = alerts.length > 0 ? alerts : fallbackLiveAlerts(activeType);
+  const { alerts, history } = useLiveAlerts(activeType, selectedOperation);
+  const visibleAlerts = alerts.length > 0 ? alerts : fallbackLiveAlerts(activeType, selectedOperation);
+  const visibleHistory = filterAlertsForOperation(history, activeType, selectedOperation);
   const leadAlert = visibleAlerts[0];
 
   return (
@@ -785,7 +793,7 @@ function LiveAlertTicker({ activeType }: { activeType: OperationType }) {
       <div className="alert-chip-list">
         {visibleAlerts.slice(0, 3).map((alert) => (
           <article key={`${alert.id}-chip`} className={cx("alert-chip", `is-${alert.level}`)}>
-            <span>{alert.source}</span>
+            <span>{alert.regionText ? `발령지역 ${alert.regionText}` : alert.source}</span>
             <strong>{alert.title}</strong>
             <p>{alert.message}</p>
           </article>
@@ -793,9 +801,9 @@ function LiveAlertTicker({ activeType }: { activeType: OperationType }) {
       </div>
       {isOpen && (
         <div className="alert-history-panel">
-          {(history.length > 0 ? history : visibleAlerts).map((alert) => (
+          {(visibleHistory.length > 0 ? visibleHistory : visibleAlerts).map((alert) => (
             <article key={`${alert.id}-${alert.timestamp}`} className={cx("alert-history-item", `is-${alert.level}`)}>
-              <span>{alert.source}</span>
+              <span>{alert.regionText ? `발령지역 ${alert.regionText}` : alert.source}</span>
               <strong>{alert.title}</strong>
               <p>{alert.message}</p>
               <time>{new Date(alert.timestamp).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", hour12: false })}</time>

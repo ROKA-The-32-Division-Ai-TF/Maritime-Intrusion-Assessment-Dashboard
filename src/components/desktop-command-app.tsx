@@ -35,6 +35,10 @@ type LiveAlert = {
   message: string;
   source: string;
   timestamp: string;
+  regions?: string[];
+  regionText?: string;
+  targetIds?: string[];
+  rawTitle?: string;
 };
 type WeatherCachePayload = {
   alerts?: LiveAlert[];
@@ -62,6 +66,48 @@ const KMA_MARINE_MAP_URL = "https://marine.kma.go.kr/mmis/?menuId=sig_wh";
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
+}
+
+function normalizeAlertMatchText(value: string) {
+  return value.replace(/[\s·ㆍ,./_()[\]{}-]/g, "").toLowerCase();
+}
+
+function alertKeywordsForOperation(operation: TheOneOperation) {
+  const baseText = `${operation.name} ${operation.area ?? ""}`;
+  const regionKeywords = ["서산", "당진", "태안", "보령", "공주", "대전", "충주"].filter((keyword) => baseText.includes(keyword));
+  const tokens = baseText
+    .split(/[·\s]+/g)
+    .map((token) => token.replace(/(권역|일대|연안|기상|관측권|공역|회랑|시|군)$/g, ""))
+    .filter((token) => token.length >= 2);
+  const seaKeywords = operation.type === "coastal" && regionKeywords.some((keyword) => ["서산", "당진", "태안", "보령"].includes(keyword))
+    ? ["서해중부", "서해중부앞바다", "서해중부먼바다", "충남북부앞바다", "충남남부앞바다"]
+    : [];
+
+  return [...new Set([...regionKeywords, ...tokens, ...seaKeywords])]
+    .map(normalizeAlertMatchText)
+    .filter((keyword) => keyword.length >= 2);
+}
+
+function alertMatchesOperation(alert: LiveAlert, activeType: OperationType, operation?: TheOneOperation) {
+  if (alert.type !== "system" && alert.type !== activeType) return false;
+  if (!operation) return alert.type !== "system";
+  if (alert.targetIds?.includes(operation.id)) return true;
+  if (alert.targetIds && alert.targetIds.length > 0) return false;
+
+  const alertText = normalizeAlertMatchText([
+    alert.title,
+    alert.message,
+    alert.source,
+    alert.regionText ?? "",
+    ...(alert.regions ?? []),
+  ].join(" "));
+
+  if (alert.type === "system") return alertKeywordsForOperation(operation).some((keyword) => alertText.includes(keyword));
+  return !alert.regionText || alertKeywordsForOperation(operation).some((keyword) => alertText.includes(keyword));
+}
+
+function filterAlertsForOperation(alerts: LiveAlert[], activeType: OperationType, operation?: TheOneOperation) {
+  return alerts.filter((alert) => alertMatchesOperation(alert, activeType, operation));
 }
 
 function assetUrl(file: string) {
@@ -350,6 +396,10 @@ export function DesktopCommandApp() {
     [activeType, selectedOperations],
   );
   const selectedOperation = activeOperations.find((operation) => operation.id === selectedId) ?? activeOperations[0] ?? selectedOperations[0];
+  const selectedAlerts = useMemo(
+    () => filterAlertsForOperation(alerts, activeType, selectedOperation),
+    [activeType, alerts, selectedOperation],
+  );
 
   function handleTypeChange(type: OperationType) {
     const first = selectedOperations.find((operation) => operation.type === type) ?? catalog.find((operation) => operation.type === type);
@@ -392,7 +442,7 @@ export function DesktopCommandApp() {
         </nav>
         <div className="desktop-sidebar-status">
           <Bell size={18} />
-          <span>특보 {alerts.length}건</span>
+          <span>선택지역 특보 {selectedAlerts.length}건</span>
         </div>
       </aside>
       <main className="desktop-main">
@@ -413,7 +463,7 @@ export function DesktopCommandApp() {
             activeType={activeType}
             operations={activeOperations}
             selectedOperation={selectedOperation}
-            alerts={alerts}
+            alerts={selectedAlerts}
             onTypeChange={handleTypeChange}
             onSelect={(operation) => setSelectedId(operation.id)}
           />
@@ -572,10 +622,11 @@ function LiveSituation({
             {(alerts.length > 0 ? alerts : []).slice(0, 8).map((alert) => (
               <article key={alert.id} className={cx("desktop-alert", `is-${alert.level}`)}>
                 <strong>{alert.title}</strong>
+                <em>{alert.regionText ? `발령지역 ${alert.regionText}` : alert.source}</em>
                 <span>{alert.message}</span>
               </article>
             ))}
-            {alerts.length === 0 && <p>현재 표시할 특보가 없습니다.</p>}
+            {alerts.length === 0 && <p>현재 선택 지역에 표시할 특보가 없습니다.</p>}
           </div>
         </section>
       </aside>
