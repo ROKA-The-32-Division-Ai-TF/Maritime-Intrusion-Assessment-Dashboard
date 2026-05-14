@@ -128,6 +128,11 @@ function cleanName(operation: TheOneOperation) {
   return operation.name.replace(/^.*?·\s*/, "").replace(/\s*(일대|권역|관측권|기상 권역)$/g, "");
 }
 
+function alertTickerText(alert: LiveAlert) {
+  const area = alert.regionText || alert.source.replace(/^기상청\s*·?\s*/, "");
+  return `${area} · ${alert.rawTitle ?? alert.message}`;
+}
+
 function clockToMinutes(value = "00:00") {
   const match = value.match(/(\d{1,2}):(\d{2})/);
   if (!match) return 0;
@@ -226,19 +231,8 @@ function windyPageUrl(operation: TheOneOperation) {
   return `https://www.windy.com/?${lat},${lon},${zoom}`;
 }
 
-function officialMapLinks(operation: TheOneOperation) {
-  const common = [
-    { label: "기상청 종합지도", href: KMA_WEATHER_MAP_URL },
-  ];
-
-  if (operation.type === "coastal") {
-    return [
-      { label: "해양기상 특보지도", href: KMA_MARINE_MAP_URL },
-      ...common,
-    ];
-  }
-
-  return common;
+function officialMapUrl(operation: TheOneOperation) {
+  return operation.type === "coastal" ? KMA_MARINE_MAP_URL : KMA_WEATHER_MAP_URL;
 }
 
 function desktopMetrics(operation: TheOneOperation): DesktopMetric[] {
@@ -471,7 +465,7 @@ export function DesktopCommandApp() {
           <img src={assetUrl("22.svg")} alt="" />
           <div>
             <span>제32보병사단</span>
-            <strong>백룡 작전기상</strong>
+            <strong>작전기상분석체계</strong>
             <em>Operational Weather Analysis</em>
           </div>
         </div>
@@ -491,10 +485,20 @@ export function DesktopCommandApp() {
             );
           })}
         </nav>
-        <div className="desktop-sidebar-status">
-          <Bell size={18} />
-          <span>선택지역 특보 {selectedAlerts.length}건</span>
-        </div>
+        <aside className="desktop-alert-ticker" aria-label="전국 실시간 특보현황">
+          <div className="desktop-alert-ticker-head">
+            <Bell size={17} />
+            <strong>전국 특보현황</strong>
+          </div>
+          <div className="desktop-alert-ticker-window">
+            <div className="desktop-alert-ticker-track">
+              {(alerts.length > 0 ? [...alerts.slice(0, 10), ...alerts.slice(0, 10)] : []).map((alert, index) => (
+                <span key={`${alert.id}-${index}`}>{alertTickerText(alert)}</span>
+              ))}
+              {alerts.length === 0 && <span>현재 표시할 기상특보가 없습니다.</span>}
+            </div>
+          </div>
+        </aside>
       </aside>
       <main className="desktop-main">
         {activeMenu === "weather" && <WeatherAnalysisSheet operations={selectedOperations} />}
@@ -628,14 +632,13 @@ function LiveSituation({
             </section>
             <section className="desktop-live-map-grid">
               <article>
-                <span>윈디</span>
                 <iframe src={windyEmbedUrl(selectedOperation)} title={`${selectedOperation.name} 윈디`} loading="lazy" />
                 <a className="desktop-map-launch" href={windyPageUrl(selectedOperation)} target="_blank" rel="noreferrer">
-                  지도 열기
+                  크게 보기
                   <ExternalLink size={14} />
                 </a>
               </article>
-              <OfficialMapCard operation={selectedOperation} />
+              <OfficialMapFrame operation={selectedOperation} />
             </section>
           </>
         ) : (
@@ -676,31 +679,15 @@ function LiveSituation({
   );
 }
 
-function OfficialMapCard({ operation }: { operation: TheOneOperation }) {
-  const metrics = desktopMetrics(operation).slice(0, 6);
-
+function OfficialMapFrame({ operation }: { operation: TheOneOperation }) {
+  const url = officialMapUrl(operation);
   return (
-    <article className="desktop-official-map-card">
-      <span>공식지도</span>
-      <div>
-        <strong>기상청 지도</strong>
-      </div>
-      <div className="desktop-official-map-metrics">
-        {metrics.map((metric) => (
-          <b key={metric.label}>
-            <small>{metric.label}</small>
-            {metric.value}
-          </b>
-        ))}
-      </div>
-      <div className="desktop-official-map-links">
-        {officialMapLinks(operation).map((link) => (
-          <a key={link.href} href={link.href} target="_blank" rel="noreferrer">
-            {link.label}
-            <ExternalLink size={15} />
-          </a>
-        ))}
-      </div>
+    <article>
+      <iframe src={url} title={`${operation.name} 공식 기상 화면`} loading="lazy" sandbox="allow-same-origin allow-scripts allow-forms" />
+      <a className="desktop-map-launch" href={url} target="_blank" rel="noreferrer">
+        크게 보기
+        <ExternalLink size={14} />
+      </a>
     </article>
   );
 }

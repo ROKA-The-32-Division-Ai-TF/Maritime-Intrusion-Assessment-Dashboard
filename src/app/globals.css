@@ -2240,7 +2240,7 @@ body:has(.desktop-app) {
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
   padding: 28px;
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.05), transparent 1px) 0 0 / 44px 44px,
@@ -2252,14 +2252,14 @@ body:has(.desktop-app) {
 
 .desktop-brand {
   display: grid;
-  grid-template-columns: 36px 1fr;
+  grid-template-columns: 38px 1fr;
   gap: 12px;
   align-items: start;
 }
 
 .desktop-brand img {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   object-fit: contain;
 }
 
@@ -2271,25 +2271,25 @@ body:has(.desktop-app) {
 
 .desktop-brand span {
   color: rgba(229, 238, 255, 0.86);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 950;
 }
 
 .desktop-brand strong {
-  margin-top: 7px;
-  max-width: 220px;
+  margin-top: 5px;
+  max-width: 230px;
   color: white;
-  font-size: clamp(26px, 2.1vw, 34px);
-  line-height: 1.08;
+  font-size: clamp(22px, 1.55vw, 28px);
+  line-height: 1.12;
   font-weight: 950;
   word-break: keep-all;
 }
 
 .desktop-brand em {
   max-width: 210px;
-  margin-top: 8px;
+  margin-top: 6px;
   color: rgba(255, 255, 255, 0.76);
-  font-size: 13px;
+  font-size: 11px;
   line-height: 1.28;
   font-style: normal;
   font-weight: 800;
@@ -2298,7 +2298,7 @@ body:has(.desktop-app) {
 .desktop-clock {
   display: grid;
   gap: 3px;
-  padding: 16px 17px;
+  padding: 12px 14px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 20px;
   background:
@@ -2315,7 +2315,7 @@ body:has(.desktop-app) {
 
 .desktop-clock strong {
   color: white;
-  font-size: clamp(28px, 2.5vw, 40px);
+  font-size: clamp(22px, 1.7vw, 28px);
   line-height: 1;
   font-weight: 950;
   font-variant-numeric: tabular-nums;
@@ -2336,8 +2336,7 @@ body:has(.desktop-app) {
   margin-top: 0;
 }
 
-.desktop-menu button,
-.desktop-sidebar-status {
+.desktop-menu button {
   min-height: 74px;
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr);
@@ -2369,14 +2368,58 @@ body:has(.desktop-app) {
   box-shadow: 0 22px 52px rgba(2, 14, 35, 0.32);
 }
 
-.desktop-sidebar-status {
-  min-height: 52px;
-  grid-template-columns: 24px minmax(0, 1fr);
-  justify-items: start;
+.desktop-alert-ticker {
+  display: grid;
+  gap: 10px;
   margin-top: auto;
-  color: #dbe8ff;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.desktop-alert-ticker-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
   font-size: 13px;
-  text-align: left;
+  font-weight: 950;
+}
+
+.desktop-alert-ticker-window {
+  height: 112px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: rgba(3, 14, 34, 0.34);
+}
+
+.desktop-alert-ticker-track {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  animation: desktop-alert-roll 28s linear infinite;
+}
+
+.desktop-alert-ticker-track span {
+  display: block;
+  min-height: 34px;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 850;
+}
+
+@keyframes desktop-alert-roll {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(-50%);
+  }
 }
 
 .desktop-main {
@@ -2651,19 +2694,6 @@ body:has(.desktop-app) {
   position: relative;
 }
 
-.desktop-live-map-grid span {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 1;
-  padding: 7px 11px;
-  border-radius: 999px;
-  background: rgba(5, 18, 38, 0.72);
-  color: white;
-  font-size: 12px;
-  font-weight: 950;
-}
-
 .desktop-map-launch {
   position: absolute;
   right: 12px;
@@ -2687,70 +2717,6 @@ body:has(.desktop-app) {
   height: 100%;
   border: 0;
   display: block;
-}
-
-.desktop-live-map-grid .desktop-official-map-card {
-  display: grid;
-  align-content: start;
-  gap: 16px;
-  padding: 58px 18px 18px;
-  background:
-    radial-gradient(circle at 82% 8%, rgba(37, 74, 165, 0.16), transparent 36%),
-    linear-gradient(180deg, #ffffff, #eef4ff);
-}
-
-.desktop-official-map-card > div:first-of-type strong {
-  display: block;
-  color: var(--desktop-blue);
-  font-size: 22px;
-  line-height: 1.1;
-  font-weight: 950;
-}
-
-.desktop-official-map-metrics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.desktop-official-map-metrics b {
-  min-height: 68px;
-  display: grid;
-  align-content: center;
-  gap: 5px;
-  padding: 11px;
-  border: 1px solid #d8e3f3;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.76);
-  color: #101a2d;
-  font-size: 17px;
-  font-weight: 950;
-}
-
-.desktop-official-map-metrics small {
-  color: #61708a;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.desktop-official-map-links {
-  display: grid;
-  gap: 8px;
-}
-
-.desktop-official-map-links a {
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  border-radius: 999px;
-  background: var(--desktop-blue);
-  color: white;
-  padding: 0 14px;
-  text-decoration: none;
-  font-size: 13px;
-  font-weight: 950;
 }
 
 .desktop-panel {
@@ -3202,12 +3168,8 @@ body:has(.desktop-app) {
     padding: 16px;
   }
 
-  .desktop-sidebar-status {
-    display: none;
-  }
-
   .desktop-menu {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .desktop-menu button {
