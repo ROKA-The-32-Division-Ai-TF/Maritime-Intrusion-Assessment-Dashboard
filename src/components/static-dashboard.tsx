@@ -5429,10 +5429,7 @@ type MarineAssessmentTableRow = {
   tideAge: string;
   current: string;
   waterTemp: string;
-  vulnerableTime: string;
   visibility: string;
-  evaluation: string;
-  evaluationLevel: "clear" | "caution" | "restrict";
 };
 
 function marineAnalysisRegionLabel(region: ResolvedRegion) {
@@ -5553,15 +5550,6 @@ function buildMonthlyAnalysisRows(
   });
 }
 
-function currentVulnerableTimeLabel(date = new Date()) {
-  const hour = Number(kstParts(date).hour);
-
-  if (hour >= 22 || hour < 4) return "야간";
-  if (hour >= 19) return "저녁";
-  if (hour >= 4 && hour < 6) return "새벽";
-  return "주간";
-}
-
 function marineVisibilityCondition(row: MarineRow, weather: WeatherNow) {
   const text = `${row.overview} ${weather.label}`;
 
@@ -5575,38 +5563,8 @@ function secondaryWaveLabel(row: MarineRow) {
   return `${Math.min(wave + 0.2, 3).toFixed(1)}m`;
 }
 
-function evaluateMarineAssessment(row: MarineRow, weather: WeatherNow) {
-  const wave = numberFromText(row.wave, 0.8);
-  const wind = numberFromText(row.windSpeed, 4);
-  const visibility = marineVisibilityCondition(row, weather);
-  const hasAlert = row.alert !== "없음" && row.alert !== "-";
-  let score = 0;
-
-  if (hasAlert) score += 25;
-  if (wave >= 2) score += 30;
-  else if (wave >= 1.2) score += 18;
-  else if (wave >= 0.8) score += 10;
-  if (wind >= 12) score += 28;
-  else if (wind >= 8) score += 18;
-  else if (wind >= 5) score += 8;
-  if (visibility === "제한") score += 20;
-  else if (visibility === "보통") score += 8;
-  if (currentVulnerableTimeLabel() !== "주간") score += 6;
-
-  if (score >= 65) {
-    return { evaluation: "제한", evaluationLevel: "restrict" as const };
-  }
-
-  if (score >= 35) {
-    return { evaluation: "주의", evaluationLevel: "caution" as const };
-  }
-
-  return { evaluation: "가능", evaluationLevel: "clear" as const };
-}
-
 function buildMarineAssessmentRow(source: MarineAnalysisSource): MarineAssessmentTableRow {
   const visibility = marineVisibilityCondition(source.row, source.weather);
-  const evaluation = evaluateMarineAssessment(source.row, source.weather);
   const tide = marineTideDisplay(source.region, source.row);
 
   return {
@@ -5618,9 +5576,7 @@ function buildMarineAssessmentRow(source: MarineAnalysisSource): MarineAssessmen
     tideAge: tide.tideAge,
     current: source.row.current,
     waterTemp: source.row.waterTemp,
-    vulnerableTime: currentVulnerableTimeLabel(),
     visibility,
-    ...evaluation,
   };
 }
 
@@ -5821,13 +5777,12 @@ function MarineAssessmentMobileGroup({
       <h3>{title}</h3>
       {rows.length ? (
         rows.map((row) => (
-          <article key={`mobile-${title}-${row.label}`} className={`assessment-mobile-card ${row.evaluationLevel}`}>
+          <article key={`mobile-${title}-${row.label}`} className="assessment-mobile-card">
             <header>
               <div>
                 <strong>{row.label}</strong>
                 <span>{row.overview} · {row.visibility}</span>
               </div>
-              <span className={`assessment-badge ${row.evaluationLevel}`}>{row.evaluation}</span>
             </header>
             <dl>
               <div>
@@ -5849,10 +5804,6 @@ function MarineAssessmentMobileGroup({
               <div>
                 <dt>수온</dt>
                 <dd>{row.waterTemp}</dd>
-              </div>
-              <div>
-                <dt>취약시기</dt>
-                <dd>{row.vulnerableTime}</dd>
               </div>
             </dl>
           </article>
@@ -5880,7 +5831,7 @@ function MarineAssessmentMatrix({
       <table className="analysis-grid-table assessment-grid-table">
         <colgroup>
           <col className="assessment-col-label" />
-          {Array.from({ length: 9 }, (_, index) => (
+          {Array.from({ length: 8 }, (_, index) => (
             <col key={index} className="assessment-col-metric" />
           ))}
           <col className="assessment-col-evaluation" />
@@ -5888,13 +5839,13 @@ function MarineAssessmentMatrix({
         <thead>
           <tr>
             <th rowSpan={3}>구분</th>
-            <th colSpan={10}>{title}</th>
+            <th colSpan={9}>{title}</th>
           </tr>
           <tr>
             <th colSpan={2}>기상</th>
             <th colSpan={2}>해상</th>
             <th colSpan={3}>{regionHeading}</th>
-            <th colSpan={2}>환경조건</th>
+            <th>환경조건</th>
             <th rowSpan={2}>종합평가</th>
           </tr>
           <tr>
@@ -5905,7 +5856,6 @@ function MarineAssessmentMatrix({
             <th>물때</th>
             <th>창조류</th>
             <th>수온</th>
-            <th>취약시기</th>
             <th>시정조건</th>
           </tr>
         </thead>
@@ -5920,11 +5870,8 @@ function MarineAssessmentMatrix({
               <td>{row.tideAge}</td>
               <td>{row.current}</td>
               <td>{row.waterTemp}</td>
-              <td>{row.vulnerableTime}</td>
               <td>{row.visibility}</td>
-              <td>
-                <span className={`assessment-badge ${row.evaluationLevel}`}>{row.evaluation}</span>
-              </td>
+              <td />
             </tr>
           ))}
           {rows.length === 0 ? (

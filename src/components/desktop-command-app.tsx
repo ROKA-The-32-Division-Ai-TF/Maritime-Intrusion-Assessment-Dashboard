@@ -57,11 +57,11 @@ type DesktopMetric = {
 };
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-const VWORLD_API_KEY = "15748A33-46F2-3387-8DF5-369AEC72C541";
+const VWORLD_API_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY ?? "";
 const DESKTOP_SELECTION_KEY = "baekryong-desktop-selection-v1";
 const DESKTOP_TYPE_KEY = "baekryong-desktop-type-v1";
 const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
-  { id: "region", label: "작전지역 현황", icon: MapIcon },
+  { id: "region", label: "작전지역 기상", icon: MapIcon },
   { id: "weather", label: "기상분석표", icon: CalendarDays },
   { id: "access", label: "밀입국 가능성", icon: ListChecks },
   { id: "live", label: "실시간 상황", icon: MapIcon },
@@ -69,8 +69,11 @@ const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
   { id: "settings", label: "사용자 설정", icon: Settings },
 ];
 const TYPES: OperationType[] = ["coastal", "ground", "air"];
+const KMA_DATA_API_URL = "https://data.kma.go.kr/api/selectApiList.do";
 const KMA_WEATHER_MAP_URL = "https://www.weather.go.kr/wgis-nuri/html/map.html#";
 const KMA_MARINE_MAP_URL = "https://marine.kma.go.kr/mmis/?menuId=sig_wh";
+const KMA_RADAR_URL = "https://www.weather.go.kr/w/weather/radar/radar.do";
+const KMA_ROAD_WEATHER_URL = "https://rwis.kma.go.kr/";
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -230,6 +233,22 @@ function weeklyTimeValues(baseMinutes: number, step = 7) {
   return WEEK_LABELS.map((_, index) => baseMinutes + index * step);
 }
 
+function weeklyLinePoints(values: number[]) {
+  const width = 320;
+  const height = 128;
+  const padX = 20;
+  const padY = 18;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(1, max - min);
+
+  return values.map((value, index) => {
+    const x = padX + (index / Math.max(1, values.length - 1)) * (width - padX * 2);
+    const y = height - padY - ((value - min) / span) * (height - padY * 2);
+    return { x, y, value };
+  });
+}
+
 function metricNumber(value: string) {
   const match = value.match(/-?\d+(\.\d+)?/);
   return match ? Number(match[0]) : null;
@@ -297,30 +316,6 @@ function weatherEmoji(operation: TheOneOperation, alerts: LiveAlert[] = []) {
   return "☀";
 }
 
-function operationClockTime(operation: TheOneOperation) {
-  if (operation.coastal?.currentTime) return operation.coastal.currentTime;
-  if (operation.ground?.currentTime) return operation.ground.currentTime;
-  const match = operation.datetime.match(/(\d{1,2}):(\d{2})/);
-  return match ? `${match[1].padStart(2, "0")}:${match[2]}` : "20:00";
-}
-
-function astronomyPhase(operation: TheOneOperation) {
-  const astro = operationAstronomy(operation);
-  if (!astro) return { label: "확인", emoji: "◌", detail: "-" };
-
-  const nowMinutes = clockToMinutes(operationClockTime(operation));
-  const bmnt = clockToMinutes(astro.bmnt);
-  const sunrise = clockToMinutes(astro.sunrise);
-  const sunset = clockToMinutes(astro.sunset);
-  const eent = clockToMinutes(astro.eent);
-
-  if (nowMinutes < bmnt) return { label: "심야", emoji: "🌙", detail: `BMNT ${astro.bmnt}` };
-  if (nowMinutes < sunrise) return { label: "BMNT", emoji: "🌅", detail: `일출 ${astro.sunrise}` };
-  if (nowMinutes < sunset) return { label: "주간", emoji: "☀", detail: `일몰 ${astro.sunset}` };
-  if (nowMinutes < eent) return { label: "EENT", emoji: "🌇", detail: `EENT ${astro.eent}` };
-  return { label: "야간", emoji: "🌙", detail: `월광 ${astro.moonlightPercent}%` };
-}
-
 function mercatorPixel(lat: number, lon: number, zoom: number) {
   const sinLat = Math.sin((lat * Math.PI) / 180);
   const scale = 256 * 2 ** zoom;
@@ -331,6 +326,7 @@ function mercatorPixel(lat: number, lon: number, zoom: number) {
 }
 
 function vworldTileUrl(x: number, y: number, zoom: number) {
+  if (!VWORLD_API_KEY) return "";
   return `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_API_KEY}/Base/${zoom}/${y}/${x}.png`;
 }
 
@@ -341,6 +337,16 @@ function mapCenter(operations: TheOneOperation[], fallback?: TheOneOperation) {
     centers.reduce((sum, center) => sum + center[0], 0) / centers.length,
     centers.reduce((sum, center) => sum + center[1], 0) / centers.length,
   ] as [number, number];
+}
+
+function operationLinkItems(operation: TheOneOperation) {
+  const mapUrl = operation.type === "coastal" ? KMA_MARINE_MAP_URL : KMA_WEATHER_MAP_URL;
+  return [
+    { label: "기상지도", href: mapUrl },
+    { label: "CCTV", href: KMA_ROAD_WEATHER_URL },
+    { label: "레이더", href: KMA_RADAR_URL },
+    { label: "API", href: KMA_DATA_API_URL },
+  ];
 }
 
 function applyOperationUpdates(operations: TheOneOperation[], payload: WeatherCachePayload) {
@@ -859,15 +865,17 @@ function VworldMap({
     <section className="desktop-vworld-map">
       <div className="desktop-vworld-tiles" aria-hidden="true">
         {tiles.map((tile) => (
-          <img
-            key={`${tile.x}-${tile.y}`}
-            src={vworldTileUrl(tile.x, tile.y, zoom)}
-            alt=""
-            style={{
-              left: `calc(50% + ${tile.x * 256 - centerPixel.x}px)`,
-              top: `calc(50% + ${tile.y * 256 - centerPixel.y}px)`,
-            }}
-          />
+          VWORLD_API_KEY ? (
+            <img
+              key={`${tile.x}-${tile.y}`}
+              src={vworldTileUrl(tile.x, tile.y, zoom)}
+              alt=""
+              style={{
+                left: `calc(50% + ${tile.x * 256 - centerPixel.x}px)`,
+                top: `calc(50% + ${tile.y * 256 - centerPixel.y}px)`,
+              }}
+            />
+          ) : null
         ))}
       </div>
       <div className="desktop-vworld-shade" />
@@ -894,7 +902,7 @@ function VworldMap({
         );
       })}
       <div className="desktop-vworld-badge">
-        <strong>VWorld</strong>
+        <strong>{VWORLD_API_KEY ? "VWorld" : "지도키 필요"}</strong>
         <span>선택 지역 {operations.length}개</span>
       </div>
     </section>
@@ -913,8 +921,8 @@ function OperationPopup({ operation, alerts }: { operation?: TheOneOperation; al
 
   const metrics = desktopMetrics(operation).slice(0, 10);
   const astro = operationAstronomy(operation);
-  const phase = astronomyPhase(operation);
   const activeAlerts = alertsForOperation(alerts, operation);
+  const linkItems = operationLinkItems(operation);
 
   return (
     <section className="desktop-panel desktop-region-popup">
@@ -930,14 +938,22 @@ function OperationPopup({ operation, alerts }: { operation?: TheOneOperation; al
       </div>
       {astro && (
         <div className="desktop-astro-card">
-          <b>{phase.emoji}</b>
+          <b>◐</b>
           <div>
-            <strong>{phase.label}</strong>
-            <span>{phase.detail}</span>
+            <strong>출몰 · 박명</strong>
+            <span>일출 {astro.sunrise} · 일몰 {astro.sunset}</span>
           </div>
-          <em>BMNT {astro.bmnt} · EENT {astro.eent}</em>
+          <em>월출 {astro.moonrise} · 월몰 {astro.moonset} · BMNT {astro.bmnt} · EENT {astro.eent}</em>
         </div>
       )}
+      <div className="desktop-region-actions">
+        {linkItems.map((item) => (
+          <a key={item.label} href={item.href} target="_blank" rel="noreferrer">
+            {item.label}
+            <ExternalLink size={13} />
+          </a>
+        ))}
+      </div>
       <div className="desktop-region-metric-list">
         {metrics.map((metric) => (
           <article key={metric.label}>
@@ -974,17 +990,10 @@ function ApiPreparationPanel() {
 function AstronomyOverview({ operation }: { operation: TheOneOperation }) {
   const astro = operationAstronomy(operation);
   if (!astro) return null;
-  const phase = astronomyPhase(operation);
   const weather = weatherLabel(operation);
 
   return (
     <section className="desktop-astro-overview">
-      <article className="is-phase">
-        <b>{phase.emoji}</b>
-        <span>현재 시간대</span>
-        <strong>{phase.label}</strong>
-        <em>{phase.detail}</em>
-      </article>
       <article>
         <b>{weather.includes("흐림") ? "☁" : weather.includes("비") ? "🌧" : "☀"}</b>
         <span>일출 / 일몰</span>
@@ -1164,12 +1173,16 @@ function WeeklySituation({
       </div>
       <aside className="desktop-live-right">
         <section className="desktop-panel desktop-briefing-card">
-          <h2>주간 메모</h2>
+          <h2>주간 핵심값</h2>
           {selectedOperation ? (
-            <div className="desktop-briefing-list">
-              <p>{cleanName(selectedOperation)} 기준으로 오늘부터 7일간 주요 관측 요소를 같은 형식으로 비교합니다.</p>
-              <p>일출·일몰·월출·월몰·조석처럼 하루 단위로 변하는 요소는 시간 카드로 표시합니다.</p>
-              <p>기온·풍속·파고·시정 등 수치형 요소는 막대 흐름으로 표시합니다.</p>
+            <div className="desktop-weekly-summary-grid">
+              {metrics.slice(0, 6).map((metric) => (
+                <article key={`summary-${metric.label}`}>
+                  <span>{metric.label}</span>
+                  <strong>{metric.value}</strong>
+                  <em>{metric.helper}</em>
+                </article>
+              ))}
             </div>
           ) : (
             <p>선택 지역 없음</p>
@@ -1211,7 +1224,9 @@ function WeeklyMetricCard({ metric, index }: { metric: DesktopMetric; index: num
   if (numeric !== null) {
     const spread = Math.max(1.5, Math.abs(numeric) * (0.08 + index * 0.01));
     const values = weeklyNumberValues(numeric, spread, Math.min(0, numeric - spread * 1.6), Math.max(100, numeric + spread * 1.8));
-    const max = Math.max(...values, 1);
+    const points = weeklyLinePoints(values);
+    const path = points.map((point) => `${point.x},${point.y}`).join(" ");
+    const areaPath = `M ${points[0].x},128 L ${path} L ${points[points.length - 1].x},128 Z`;
 
     return (
       <article className="desktop-weekly-card">
@@ -1219,11 +1234,22 @@ function WeeklyMetricCard({ metric, index }: { metric: DesktopMetric; index: num
           <span>{metric.label}</span>
           <strong>{metric.value}</strong>
         </header>
-        <div className="desktop-weekly-bars">
+        <div className="desktop-weekly-line-chart">
+          <svg viewBox="0 0 320 128" role="img" aria-label={`${metric.label} 주간 예측`}>
+            <path d={areaPath} />
+            <polyline points={path} />
+            {points.map((point, pointIndex) => (
+              <g key={`${metric.label}-point-${WEEK_LABELS[pointIndex]}`}>
+                <circle cx={point.x} cy={point.y} r={4.5} />
+                <text x={point.x} y={Math.max(12, point.y - 9)}>{point.value}{unit}</text>
+              </g>
+            ))}
+          </svg>
+        </div>
+        <div className="desktop-weekly-value-grid">
           {values.map((value, dayIndex) => (
             <b key={`${metric.label}-${WEEK_LABELS[dayIndex]}`}>
               <small>{WEEK_LABELS[dayIndex]}</small>
-              <i style={{ width: `${Math.max(8, (value / max) * 100)}%` }} />
               <em>{value}{unit}</em>
             </b>
           ))}
@@ -1357,7 +1383,7 @@ function AssessmentBlock({ title, rows }: { title: string; rows: TheOneOperation
               <th colSpan={2}>기상</th>
               <th colSpan={2}>해상</th>
               <th colSpan={3}>지역</th>
-              <th colSpan={2}>환경조건</th>
+              <th>환경조건</th>
               <th rowSpan={2}>종합평가</th>
             </tr>
             <tr>
@@ -1368,7 +1394,6 @@ function AssessmentBlock({ title, rows }: { title: string; rows: TheOneOperation
               <th>물때</th>
               <th>조류</th>
               <th>수온</th>
-              <th>취약시기</th>
               <th>시정조건</th>
             </tr>
           </thead>
@@ -1388,9 +1413,8 @@ function AssessmentBlock({ title, rows }: { title: string; rows: TheOneOperation
                   <td>{data.tideAge}</td>
                   <td>{data.currentDirection} {data.currentSpeedKt}kt</td>
                   <td>{data.waterTempC}℃</td>
-                  <td>{data.currentTime}</td>
                   <td>{data.visibilityKm}km</td>
-                  <td><span className={cx("desktop-judge", statusText(operation).includes("주의") || statusText(operation).includes("저시정") ? "is-watch" : "")}>{statusText(operation)}</span></td>
+                  <td />
                 </tr>
               );
             })}
@@ -1481,13 +1505,19 @@ function DesktopSettings({
         <div className="desktop-credit-card">
           <Copyright size={20} />
           <span>공공자료</span>
-          <strong>기상청 · 국립해양조사원 · 한국천문연구원 · 에어코리아</strong>
+          <strong>기상청 · 국립해양조사원 · 한국천문연구원 · 에어코리아 · 브이월드</strong>
           <em>공공데이터 기반 캐시를 정적 사이트에 표시합니다.</em>
+        </div>
+        <div className="desktop-credit-card">
+          <Database size={20} />
+          <span>API 확장 대기</span>
+          <strong>CCTV 도로날씨 · 레이더/위성 · 생활기상지수 · 태풍 · 영향예보 · GTS · 낙뢰 · 고층기상 · 해수욕장 날씨</strong>
+          <em>키는 GitHub Actions Secrets에서만 읽고, 프론트엔드 코드에는 저장하지 않습니다.</em>
         </div>
         <div className="desktop-credit-card">
           <MapIcon size={20} />
           <span>지도자료</span>
-          <strong>Windy · 기상청 날씨누리 · 해양기상정보포털</strong>
+          <strong>브이월드 · Windy · 기상청 날씨누리 · 해양기상정보포털</strong>
           <em>지도 화면은 각 제공기관의 원본 화면 및 정책을 따릅니다.</em>
         </div>
         <div className="desktop-credit-card is-maker">

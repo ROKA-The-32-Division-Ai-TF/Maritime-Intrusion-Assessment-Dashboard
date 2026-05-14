@@ -52,6 +52,16 @@ jobs:
           KASI_SERVICE_KEY: ${{ secrets.KASI_SERVICE_KEY }}
           AIRKOREA_SERVICE_KEY: ${{ secrets.AIRKOREA_SERVICE_KEY }}
           FOREST_SERVICE_KEY: ${{ secrets.FOREST_SERVICE_KEY }}
+          KMA_ROAD_WEATHER_SERVICE_KEY: ${{ secrets.KMA_ROAD_WEATHER_SERVICE_KEY }}
+          KMA_RADAR_SERVICE_KEY: ${{ secrets.KMA_RADAR_SERVICE_KEY }}
+          KMA_LIFE_INDEX_SERVICE_KEY: ${{ secrets.KMA_LIFE_INDEX_SERVICE_KEY }}
+          KMA_TYPHOON_SERVICE_KEY: ${{ secrets.KMA_TYPHOON_SERVICE_KEY }}
+          KMA_IMPACT_FORECAST_SERVICE_KEY: ${{ secrets.KMA_IMPACT_FORECAST_SERVICE_KEY }}
+          KMA_GTS_SERVICE_KEY: ${{ secrets.KMA_GTS_SERVICE_KEY }}
+          KMA_LIGHTNING_SERVICE_KEY: ${{ secrets.KMA_LIGHTNING_SERVICE_KEY }}
+          KMA_SATELLITE_SERVICE_KEY: ${{ secrets.KMA_SATELLITE_SERVICE_KEY }}
+          KMA_UPPER_AIR_SERVICE_KEY: ${{ secrets.KMA_UPPER_AIR_SERVICE_KEY }}
+          KMA_BEACH_WEATHER_SERVICE_KEY: ${{ secrets.KMA_BEACH_WEATHER_SERVICE_KEY }}
           KHOA_TIDE_OBS_CODE_SEOSAN: ${{ secrets.KHOA_TIDE_OBS_CODE_SEOSAN }}
           KHOA_TIDE_OBS_CODE_DANGJIN: ${{ secrets.KHOA_TIDE_OBS_CODE_DANGJIN }}
           KHOA_TIDE_OBS_CODE_TAEAN: ${{ secrets.KHOA_TIDE_OBS_CODE_TAEAN }}
@@ -61,6 +71,7 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_BASE_PATH: /Maritime-Intrusion-Assessment-Dashboard
+          NEXT_PUBLIC_VWORLD_API_KEY: ${{ secrets.VWORLD_API_KEY }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

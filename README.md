@@ -56,6 +56,19 @@
 - 한국천문연구원 출몰시각: 일출, 일몰, 월출, 월몰, BMNT, EENT 후보
 - 국립해양조사원 조석예보: 관측소 코드가 설정된 항구의 만조, 간조
 
+추가 연동 대기 API는 다음 Secrets 이름으로 분리해 둡니다. 키 값은 GitHub 저장소에 커밋하지 않고, GitHub Actions Secrets 또는 내부망 변환 서버 환경변수로만 관리합니다.
+
+- `KMA_ROAD_WEATHER_SERVICE_KEY`: CCTV 기반 도로날씨정보 조회서비스
+- `KMA_RADAR_SERVICE_KEY`: 기상청 레이더영상 조회서비스
+- `KMA_LIFE_INDEX_SERVICE_KEY`: 기상청 생활기상지수 조회서비스
+- `KMA_TYPHOON_SERVICE_KEY`: 기상청 태풍정보 조회서비스
+- `KMA_IMPACT_FORECAST_SERVICE_KEY`: 기상청 영향예보 조회서비스
+- `KMA_GTS_SERVICE_KEY`: 기상청 세계기상전문 조회서비스
+- `KMA_LIGHTNING_SERVICE_KEY`: 기상청 낙뢰관측자료 조회서비스
+- `KMA_SATELLITE_SERVICE_KEY`: 기상청 위성영상 조회서비스
+- `KMA_UPPER_AIR_SERVICE_KEY`: 기상청 고층기상 자료
+- `KMA_BEACH_WEATHER_SERVICE_KEY`: 전국 해수욕장 날씨 조회서비스
+
 해양 파고/수온은 현재 기상청 초단기 풍속·강수 기반 추정값으로 캐시에 반영하며, 기상청 해양관측 또는 해양부이 API 키와 지점코드가 확보되면 동일한 캐시 구조에 실측값으로 교체할 수 있습니다.
 
 ## 정적 운용 원칙
@@ -111,7 +124,7 @@ NEXT_PUBLIC_BASE_PATH=/Maritime-Intrusion-Assessment-Dashboard npm run build
 3. 정적 사이트 빌드
 4. GitHub Pages 배포
 
-Actions Secrets에 `PUBLIC_DATA_SERVICE_KEY`, `KMA_SERVICE_KEY`, `KHOA_SERVICE_KEY`, `KASI_SERVICE_KEY`, `AIRKOREA_SERVICE_KEY`, `KHOA_TIDE_OBS_CODE_SEOSAN`, `KHOA_TIDE_OBS_CODE_DANGJIN`, `KHOA_TIDE_OBS_CODE_TAEAN`, `KHOA_TIDE_OBS_CODE_BORYEONG` 등을 넣으면 실제 캐시 갱신에 사용됩니다. `WEATHER_CACHE_SOURCE_URL`을 넣으면 내부 변환 서버가 만든 JSON을 우선 사용합니다.
+Actions Secrets에 `PUBLIC_DATA_SERVICE_KEY`, `KMA_SERVICE_KEY`, `KHOA_SERVICE_KEY`, `KASI_SERVICE_KEY`, `AIRKOREA_SERVICE_KEY`, `KHOA_TIDE_OBS_CODE_SEOSAN`, `KHOA_TIDE_OBS_CODE_DANGJIN`, `KHOA_TIDE_OBS_CODE_TAEAN`, `KHOA_TIDE_OBS_CODE_BORYEONG` 등을 넣으면 실제 캐시 갱신에 사용됩니다. 추가 API는 위 `KMA_*_SERVICE_KEY` 이름으로 넣습니다. `WEATHER_CACHE_SOURCE_URL`을 넣으면 내부 변환 서버가 만든 JSON을 우선 사용합니다.
 
 ## 보안 주의
 
