@@ -45,9 +45,24 @@ type LiveAlert = {
   targetIds?: string[];
   rawTitle?: string;
 };
+type RoadCctvWeather = {
+  id: string;
+  stationName: string;
+  roadName?: string;
+  observedAt?: string;
+  weatherLabel: string;
+  fogLabel?: string;
+  rainLabel?: string;
+  snowLabel?: string;
+  lat?: number;
+  lon?: number;
+  nearestOperationIds?: string[];
+  source?: string;
+};
 type WeatherCachePayload = {
   alerts?: LiveAlert[];
   operationUpdates?: Partial<TheOneOperation>[];
+  roadCctv?: RoadCctvWeather[];
 };
 type DesktopMetric = {
   label: string;
@@ -163,29 +178,42 @@ function catalogLocationParts(operation: TheOneOperation) {
   const text = `${operation.name} ${operation.area}`;
   const city = displayRegionName(operation);
 
-  if (text.includes("중국")) return { province: "국외", city: "중국", detail: city };
-  if (text.includes("일본")) return { province: "국외", city: "일본", detail: city };
-  if (["서울", "인천", "김포", "수원", "파주", "용인", "백령"].some((keyword) => text.includes(keyword))) {
-    return { province: "수도권", city, detail: operation.area };
-  }
-  if (["철원", "춘천", "원주", "강릉", "속초", "양양", "태백"].some((keyword) => text.includes(keyword))) {
-    return { province: "강원권", city, detail: operation.area };
-  }
-  if (["서산", "당진", "태안", "보령", "대전", "세종", "청주", "충주", "공주", "천안", "아산"].some((keyword) => text.includes(keyword))) {
-    return { province: "충청권", city, detail: operation.area };
-  }
-  if (["군산", "전주", "광주", "무안", "여수", "목포"].some((keyword) => text.includes(keyword))) {
-    return { province: "호남권", city, detail: operation.area };
-  }
-  if (["대구", "부산", "김해", "울산", "포항", "사천"].some((keyword) => text.includes(keyword))) {
-    return { province: "영남권", city, detail: operation.area };
-  }
-  if (["제주", "서귀포", "성산"].some((keyword) => text.includes(keyword))) {
-    return { province: "제주권", city, detail: operation.area };
-  }
+  const provinceRules: Array<[string, string[]]> = [
+    ["국외 · 중국", ["중국", "대련", "위해", "동중국해"]],
+    ["국외 · 일본", ["일본"]],
+    ["서울특별시", ["서울", "강남"]],
+    ["인천광역시", ["인천", "백령", "을왕리", "영종"]],
+    ["경기도", ["김포", "수원", "파주", "용인", "성남", "오산", "평택"]],
+    ["강원특별자치도", ["철원", "춘천", "원주", "강릉", "속초", "양양", "태백", "삼척", "동해"]],
+    ["충청북도", ["청주", "충주"]],
+    ["충청남도", ["서산", "당진", "태안", "보령", "공주", "천안", "아산", "서천", "홍성", "만리포", "꽃지", "대천", "장항", "홍원", "마량", "남당", "대산", "해미"]],
+    ["대전광역시", ["대전", "유성"]],
+    ["세종특별자치시", ["세종"]],
+    ["전라북도", ["군산", "전주"]],
+    ["광주광역시", ["광주"]],
+    ["전라남도", ["무안", "여수", "목포", "완도", "순천", "광양"]],
+    ["대구광역시", ["대구"]],
+    ["부산광역시", ["부산", "해운대"]],
+    ["울산광역시", ["울산"]],
+    ["경상북도", ["포항", "울릉", "경주", "안동", "영주", "울진"]],
+    ["경상남도", ["김해", "사천", "통영", "거제", "창원"]],
+    ["제주특별자치도", ["제주", "서귀포", "성산", "한림", "협재"]],
+  ];
+  const matched = provinceRules.find(([, keywords]) => keywords.some((keyword) => text.includes(keyword) || city.includes(keyword)));
 
-  const fallbackProvince = operation.type === "coastal" ? "기타 해상" : operation.type === "ground" ? "기타 육상" : "기타 공중";
-  return { province: fallbackProvince, city, detail: operation.area };
+  if (matched) return { province: matched[0], city, detail: operation.area };
+
+  const [lat, lon] = operation.center ?? [36.7, 126.6];
+  if (lon < 123 || (lon > 130 && lat < 36)) return { province: "국외 · 참고해역", city, detail: operation.area };
+  if (lat >= 37.2 && lon < 127.8) return { province: "경기도", city, detail: operation.area };
+  if (lat >= 37.0 && lon >= 127.8) return { province: "강원특별자치도", city, detail: operation.area };
+  if (lat >= 36.0 && lon < 127.2) return { province: "충청남도", city, detail: operation.area };
+  if (lat >= 36.0 && lon < 128.2) return { province: "충청북도", city, detail: operation.area };
+  if (lat >= 35.2 && lon < 127.7) return { province: "전라북도", city, detail: operation.area };
+  if (lat < 35.2 && lon < 127.9) return { province: "전라남도", city, detail: operation.area };
+  if (lon >= 128.2 && lat >= 35.7) return { province: "경상북도", city, detail: operation.area };
+  if (lon >= 127.8 && lat < 35.7) return { province: "경상남도", city, detail: operation.area };
+  return { province: "제주특별자치도", city, detail: operation.area };
 }
 
 function alertTickerText(alert: LiveAlert) {
@@ -579,6 +607,7 @@ function buildBriefing(operation: TheOneOperation) {
 function useDesktopData() {
   const [catalog, setCatalog] = useState(allOperations);
   const [alerts, setAlerts] = useState<LiveAlert[]>([]);
+  const [roadCctv, setRoadCctv] = useState<RoadCctvWeather[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -592,8 +621,12 @@ function useDesktopData() {
 
         setCatalog((current) => applyOperationUpdates(current, payload));
         setAlerts(Array.isArray(payload.alerts) ? payload.alerts : []);
+        setRoadCctv(Array.isArray(payload.roadCctv) ? payload.roadCctv : []);
       } catch {
-        if (active) setAlerts([]);
+        if (active) {
+          setAlerts([]);
+          setRoadCctv([]);
+        }
       }
     }
 
@@ -606,7 +639,7 @@ function useDesktopData() {
     };
   }, []);
 
-  return { catalog, alerts };
+  return { catalog, alerts, roadCctv };
 }
 
 function useKstClock() {
@@ -624,7 +657,7 @@ function useKstClock() {
 }
 
 export function DesktopCommandApp() {
-  const { catalog, alerts } = useDesktopData();
+  const { catalog, alerts, roadCctv } = useDesktopData();
   const clock = useKstClock();
   const [activeMenu, setActiveMenu] = useState<DesktopMenu>("region");
   const [activeType, setActiveType] = useState<OperationType>("coastal");
@@ -752,6 +785,7 @@ export function DesktopCommandApp() {
             operations={activeOperations}
             selectedOperation={selectedOperation}
             alerts={selectedAlerts}
+            roadCctv={roadCctv}
             onTypeChange={handleTypeChange}
             onSelect={(operation) => setSelectedId(operation.id)}
           />
@@ -858,19 +892,14 @@ function OperationRegionStatus({
 
   return (
     <section className="desktop-region-grid">
-      <div className="desktop-live-left">
-        <DesktopTypeSwitch activeType={activeType} onTypeChange={onTypeChange} />
-        <OperationRail operations={operations} selectedId={selectedOperation?.id} onSelect={(operation) => {
-          setPopupId(operation.id);
-          onSelect(operation);
-        }} />
-      </div>
       <div className="desktop-vworld-panel">
         <VworldMap
           key={mapOperations.map((operation) => operation.id).join("|")}
+          activeType={activeType}
           operations={mapOperations}
           selectedOperation={popupOperation}
           alerts={alerts}
+          onTypeChange={onTypeChange}
           onSelect={(operation) => {
             setPopupId(operation.id);
             onSelect(operation);
@@ -885,14 +914,18 @@ function OperationRegionStatus({
 }
 
 function VworldMap({
+  activeType,
   operations,
   selectedOperation,
   alerts,
+  onTypeChange,
   onSelect,
 }: {
+  activeType: OperationType;
   operations: TheOneOperation[];
   selectedOperation?: TheOneOperation;
   alerts: LiveAlert[];
+  onTypeChange: (type: OperationType) => void;
   onSelect: (operation: TheOneOperation) => void;
 }) {
   const fittedView = useMemo(() => fittedMapView(operations, selectedOperation), [operations, selectedOperation]);
@@ -920,7 +953,11 @@ function VworldMap({
       className="desktop-vworld-map"
       onPointerDown={(event) => {
         dragRef.current = { x: event.clientX, y: event.clientY, center };
-        event.currentTarget.setPointerCapture(event.pointerId);
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          dragRef.current = null;
+        }
       }}
       onPointerMove={(event) => {
         if (!dragRef.current) return;
@@ -937,6 +974,10 @@ function VworldMap({
       }}
       onPointerCancel={() => {
         dragRef.current = null;
+      }}
+      onWheel={(event) => {
+        event.preventDefault();
+        zoomBy(event.deltaY > 0 ? -1 : 1);
       }}
     >
       <div className="desktop-vworld-tiles" aria-hidden="true">
@@ -955,6 +996,14 @@ function VworldMap({
         ))}
       </div>
       <div className="desktop-vworld-shade" />
+      <div
+        className="desktop-map-type-switch"
+        onPointerDown={(event) => event.stopPropagation()}
+        onPointerMove={(event) => event.stopPropagation()}
+        onPointerUp={(event) => event.stopPropagation()}
+      >
+        <DesktopTypeSwitch activeType={activeType} onTypeChange={onTypeChange} />
+      </div>
       <div
         className="desktop-map-controls"
         aria-label="지도 조작"
@@ -991,6 +1040,7 @@ function VworldMap({
               left: `calc(50% + ${point.x - centerPixel.x}px)`,
               top: `calc(50% + ${point.y - centerPixel.y}px)`,
             }}
+            onPointerDown={(event) => event.stopPropagation()}
             onClick={() => onSelect(operation)}
           >
             <span>{weatherEmoji(operation, alerts)}</span>
@@ -1085,6 +1135,7 @@ function LiveSituation({
   operations,
   selectedOperation,
   alerts,
+  roadCctv,
   onTypeChange,
   onSelect,
 }: {
@@ -1092,6 +1143,7 @@ function LiveSituation({
   operations: TheOneOperation[];
   selectedOperation?: TheOneOperation;
   alerts: LiveAlert[];
+  roadCctv: RoadCctvWeather[];
   onTypeChange: (type: OperationType) => void;
   onSelect: (operation: TheOneOperation) => void;
 }) {
@@ -1129,14 +1181,13 @@ function LiveSituation({
               })}
             </section>
             <section className="desktop-live-map-grid">
-              <article>
+              <article className="desktop-windy-panel">
                 <iframe src={windyEmbedUrl(selectedOperation)} title={`${selectedOperation.name} 윈디`} loading="lazy" />
                 <a className="desktop-map-launch" href={windyPageUrl(selectedOperation)} target="_blank" rel="noreferrer">
                   크게 보기
                   <ExternalLink size={14} />
                 </a>
               </article>
-              <WeatherImageryPanel operation={selectedOperation} />
             </section>
           </>
         ) : (
@@ -1172,49 +1223,38 @@ function LiveSituation({
             {alerts.length === 0 && <p>현재 선택 지역에 표시할 특보가 없습니다.</p>}
           </div>
         </section>
+        <RoadCctvPanel items={roadCctv} operation={selectedOperation} />
       </aside>
     </section>
   );
 }
 
-function WeatherImageryPanel({ operation }: { operation: TheOneOperation }) {
-  const items = operation.type === "coastal"
-    ? [
-        ["해양특보", "풍랑·안개·시정"],
-        ["위성영상", "구름·해무"],
-        ["레이더", "강수 이동"],
-        ["해수욕장 날씨", "연안 관측"],
-      ]
-    : operation.type === "ground"
-      ? [
-          ["레이더", "강수 이동"],
-          ["위성영상", "구름 분포"],
-          ["생활기상지수", "온열·자외선"],
-          ["낙뢰관측", "뇌우 감시"],
-        ]
-      : [
-          ["레이더", "강수 회피"],
-          ["위성영상", "구름대"],
-          ["낙뢰관측", "비행 제한"],
-          ["고층기상", "상층풍"],
-        ];
+function RoadCctvPanel({ items, operation }: { items: RoadCctvWeather[]; operation?: TheOneOperation }) {
+  const visibleItems = useMemo(() => {
+    if (!operation) return items.slice(0, 5);
+    const matched = items.filter((item) => item.nearestOperationIds?.includes(operation.id));
+    return (matched.length > 0 ? matched : items).slice(0, 5);
+  }, [items, operation]);
 
   return (
-    <article className="desktop-imagery-panel">
-      <header>
-        <span>기상 영상자료</span>
-        <strong>{cleanName(operation)}</strong>
-      </header>
-      <div>
-        {items.map(([label, helper]) => (
-          <b key={label}>
-            <small>{label}</small>
-            <em>{helper}</em>
-          </b>
-        ))}
+    <section className="desktop-panel desktop-cctv-panel">
+      <h2>CCTV 도로날씨</h2>
+      <div className="desktop-cctv-list">
+        {visibleItems.length > 0 ? visibleItems.map((item) => (
+          <article key={item.id}>
+            <strong>{item.stationName}</strong>
+            <span>{item.roadName ?? "관측지점"} · {item.weatherLabel}</span>
+            <em>
+              {item.fogLabel ? `안개 ${item.fogLabel}` : "안개 정보 없음"}
+              {item.rainLabel ? ` · 강수 ${item.rainLabel}` : ""}
+              {item.observedAt ? ` · ${item.observedAt}` : ""}
+            </em>
+          </article>
+        )) : (
+          <p>수신된 CCTV 기반 도로날씨가 없습니다.</p>
+        )}
       </div>
-      <p>GitHub Actions 캐시 연동 후 영상·관측 썸네일을 이 영역에 표시합니다.</p>
-    </article>
+    </section>
   );
 }
 
@@ -1455,7 +1495,7 @@ function AccessAssessmentSheet({ operations }: { operations: TheOneOperation[] }
   if (coastal.length === 0) return <DesktopEmptySheet label="해안 지역을 선택하면 판단표가 표시됩니다." />;
 
   return (
-    <section className="desktop-sheet">
+    <section className="desktop-sheet desktop-assessment-sheet">
       <div className="desktop-sheet-head">
         <div className="desktop-month-nav">
           <button

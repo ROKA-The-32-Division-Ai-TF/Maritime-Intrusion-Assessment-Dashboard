@@ -11,6 +11,8 @@ const KMA_WARNING_MSG_URL = "https://apis.data.go.kr/1360000/WthrWrnInfoService/
 const AIRKOREA_URL = "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty";
 const KASI_RISE_SET_URL = "https://apis.data.go.kr/B090041/openapi/service/RiseSetInfoService/getAreaRiseSetInfo";
 const KHOA_TIDE_URL = "https://khoa.go.kr/oceandata/odmiapi/GetTideFcstHghLwApiService.do";
+const KMA_ROAD_CCTV_URL = "https://apihub.kma.go.kr/api/typ01/url/cctv_ana_info.php";
+const KMA_ROAD_CCTV_INFO_URL = "https://apihub.kma.go.kr/api/typ01/url/cctv_road_info.php";
 const DEFAULT_DEPLOYED_CACHE_URL = "https://roka-the-32-division-ai-tf.github.io/Maritime-Intrusion-Assessment-Dashboard/data/weather-cache.json";
 
 const operationTargets = [
@@ -64,6 +66,10 @@ function ymd(date) {
   return `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, "0")}${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
+function ymdhm(date) {
+  return `${ymd(date)}${String(date.getUTCHours()).padStart(2, "0")}${String(date.getUTCMinutes()).padStart(2, "0")}`;
+}
+
 function kmaTimestamp(tmFc) {
   const value = String(tmFc ?? "");
   if (value.length < 8) return new Date().toISOString();
@@ -74,6 +80,12 @@ function kmaTimestamp(tmFc) {
   const hour = value.length >= 10 ? value.slice(8, 10) : "00";
   const minute = value.length >= 12 ? value.slice(10, 12) : "00";
   return new Date(`${year}-${month}-${day}T${hour}:${minute}:00+09:00`).toISOString();
+}
+
+function displayKstMinute(value) {
+  const text = String(value ?? "").replace(/\D/g, "");
+  if (text.length < 12) return "";
+  return `${text.slice(4, 6)}.${text.slice(6, 8)} ${text.slice(8, 10)}:${text.slice(10, 12)}`;
 }
 
 function hourBaseTime() {
@@ -361,6 +373,18 @@ async function fetchJson(url, params) {
   }
 }
 
+async function fetchText(url, params) {
+  const requestUrl = `${url}?${new URLSearchParams(params).toString()}`;
+  const response = await fetch(requestUrl, { headers: { accept: "text/plain,*/*" } });
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`${url} failed: ${response.status}`);
+  }
+
+  return text;
+}
+
 async function loadPreparedFeed() {
   const sourceUrl = env("WEATHER_CACHE_SOURCE_URL");
   if (!sourceUrl) return null;
@@ -572,6 +596,183 @@ async function fetchTide(target) {
   };
 }
 
+function parseKmaTextTable(text, fallbackHeaders = []) {
+  const rows = [];
+  let headers = [...fallbackHeaders];
+  const lines = String(text ?? "").split(/\r?\n/);
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || /^#?(START|END)\d*/i.test(trimmed)) return;
+    const normalized = trimmed.replace(/^#\s*/, "");
+    const columns = normalized.includes(",")
+      ? normalized.split(",").map((value) => value.trim())
+      : normalized.split(/\s+/).map((value) => value.trim());
+    if (columns.length < 2) return;
+
+    const headerLike = columns.some((column) => /^(TM|EQP_ID|STN_NM|LAT|LON|WH_CD|RN_CD|FOG_CD|SN_CD|ROAD_NAME)$/i.test(column));
+    if (headerLike) {
+      headers = columns.map((column) => column.trim());
+      return;
+    }
+
+    if (headers.length === 0) {
+      rows.push(Object.fromEntries(columns.map((value, index) => [`_${index}`, value])));
+      return;
+    }
+
+    const row = {};
+    headers.forEach((header, index) => {
+      row[header] = columns[index] ?? "";
+    });
+    rows.push(row);
+  });
+
+  return rows;
+}
+
+function codeLabel(value, labels, fallback = "확인") {
+  const key = String(value ?? "").trim();
+  if (!key || key === "-9") return fallback;
+  return labels[key] ?? fallback;
+}
+
+function roadWeatherLabel(value) {
+  return codeLabel(value, {
+    "00": "맑음",
+    "0": "맑음",
+    "11": "안개 약",
+    "12": "안개 중",
+    "13": "안개 강",
+    "21": "비 약",
+    "22": "비 중",
+    "23": "비 강",
+    "31": "눈 약",
+    "32": "눈 중",
+    "33": "눈 강",
+  }, "관측");
+}
+
+function fogCodeLabel(value) {
+  return codeLabel(value, {
+    "00": "없음",
+    "0": "없음",
+    "11": "약",
+    "12": "중",
+    "13": "강",
+  }, "확인");
+}
+
+function rainCodeLabel(value) {
+  return codeLabel(value, {
+    "00": "없음",
+    "0": "없음",
+    "21": "약",
+    "22": "중",
+    "23": "강",
+  }, "확인");
+}
+
+function snowCodeLabel(value) {
+  return codeLabel(value, {
+    "00": "없음",
+    "0": "없음",
+    "31": "약",
+    "32": "중",
+    "33": "강",
+  }, "확인");
+}
+
+function distanceKm(firstLat, firstLon, secondLat, secondLon) {
+  const rad = Math.PI / 180;
+  const dLat = (secondLat - firstLat) * rad;
+  const dLon = (secondLon - firstLon) * rad;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(firstLat * rad) * Math.cos(secondLat * rad) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function nearestOperationIds(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [];
+  return operationTargets
+    .map((target) => ({
+      id: target.id,
+      distance: distanceKm(lat, lon, target.lat, target.lon),
+    }))
+    .sort((first, second) => first.distance - second.distance)
+    .filter((item, index) => index < 3 || item.distance <= 75)
+    .slice(0, 4)
+    .map((item) => item.id);
+}
+
+async function fetchRoadCctvWeather() {
+  const authKey = apiKey("KMA_ROAD_WEATHER_SERVICE_KEY") || apiKey("KMA_APIHUB_AUTH_KEY");
+  if (!authKey) return null;
+
+  try {
+    const infoText = await fetchText(KMA_ROAD_CCTV_INFO_URL, {
+      eqp: "0",
+      disp: "1",
+      help: "1",
+      authKey,
+    }).catch(() => "");
+    const infoRows = parseKmaTextTable(infoText, ["EQP_ID", "STN_NM", "LAT", "LON", "HT", "ROAD_NAME"]);
+    const infoById = new Map(infoRows.map((row) => {
+      const id = row.EQP_ID ?? row._0;
+      return [String(id), row];
+    }));
+    const now = kstNow();
+    const text = await fetchText(KMA_ROAD_CCTV_URL, {
+      tm1: ymdhm(kstNow(-90)),
+      tm2: ymdhm(now),
+      eqp: "0",
+      disp: "1",
+      help: "1",
+      authKey,
+    });
+    const rows = parseKmaTextTable(text, ["TM", "EQP_ID", "STN_NM", "LAT", "LON", "HT", "WH_CD", "FOG_CD", "RN_CD", "SN_CD"]);
+    const latestByStation = new Map();
+
+    rows.forEach((row) => {
+      const id = String(row.EQP_ID ?? row._1 ?? "").trim();
+      if (!id) return;
+      const current = latestByStation.get(id);
+      const tm = String(row.TM ?? row._0 ?? "");
+      if (!current || String(current.TM ?? current._0 ?? "") < tm) {
+        latestByStation.set(id, row);
+      }
+    });
+
+    return [...latestByStation.values()]
+      .map((row) => {
+        const id = String(row.EQP_ID ?? row._1 ?? "");
+        const info = infoById.get(id) ?? {};
+        const lat = safeNumber(row.LAT ?? row._3 ?? info.LAT, NaN);
+        const lon = safeNumber(row.LON ?? row._4 ?? info.LON, NaN);
+
+        return {
+          id: `road-cctv-${id}`,
+          stationName: compactText(row.STN_NM ?? row._2 ?? info.STN_NM ?? id),
+          roadName: compactText(row.ROAD_NAME ?? info.ROAD_NAME ?? ""),
+          observedAt: displayKstMinute(row.TM ?? row._0),
+          weatherLabel: roadWeatherLabel(row.WH_CD ?? row._6),
+          fogLabel: fogCodeLabel(row.FOG_CD ?? row._7),
+          rainLabel: rainCodeLabel(row.RN_CD ?? row._8),
+          snowLabel: snowCodeLabel(row.SN_CD ?? row._9),
+          lat: Number.isFinite(lat) ? Number(lat.toFixed(5)) : undefined,
+          lon: Number.isFinite(lon) ? Number(lon.toFixed(5)) : undefined,
+          nearestOperationIds: nearestOperationIds(lat, lon),
+          source: "기상청 CCTV 기반 도로날씨정보",
+        };
+      })
+      .filter((item) => item.stationName && (item.nearestOperationIds?.length ?? 0) > 0)
+      .slice(0, 80);
+  } catch (error) {
+    console.warn(`KMA road CCTV failed: ${error instanceof Error ? error.message : error}`);
+    return null;
+  }
+}
+
 function marineValuesFromWeather(values) {
   const waveHeightM = Number(Math.max(0.2, values.windSpeedMs * 0.09 + values.precipitationMm * 0.025).toFixed(1));
 
@@ -748,6 +949,20 @@ function fallbackPayload() {
     alerts: [
       alert("weather-warning-pending", "system", "watch", "기상특보 확인", "현재 공식 특보 자료 수신을 준비 중입니다.", "기상청"),
     ],
+    roadCctv: [
+      {
+        id: "road-cctv-fallback-seosan",
+        stationName: "서산권 도로날씨",
+        roadName: "CCTV 기반 도로날씨",
+        observedAt: displayKstMinute(ymdhm(kstNow())),
+        weatherLabel: "관측 대기",
+        fogLabel: "확인",
+        rainLabel: "확인",
+        snowLabel: "확인",
+        nearestOperationIds: ["coastal-seosan", "ground-land-seosan", "air-A-A"],
+        source: "기상청 CCTV 기반 도로날씨정보",
+      },
+    ],
   };
 }
 
@@ -792,9 +1007,10 @@ function liveAlerts(updates, officialAlerts = []) {
 }
 
 async function livePayload() {
-  const [results, officialAlerts, deployedCache, localCache] = await Promise.all([
+  const [results, officialAlerts, roadCctv, deployedCache, localCache] = await Promise.all([
     Promise.all(operationTargets.map(buildOperationUpdate)),
     fetchKmaWarningAlerts(),
+    fetchRoadCctvWeather(),
     loadExistingCache(),
     loadLocalCache(),
   ]);
@@ -818,8 +1034,18 @@ async function livePayload() {
     ...results.flatMap((result) => result.sources),
   ]);
   if (officialAlerts?.length) sourceSet.add("기상청 기상특보");
+  if (roadCctv?.length) sourceSet.add("기상청 CCTV 기반 도로날씨정보");
 
-  if (updates.length === 0) return fallbackPayload();
+  if (updates.length === 0) {
+    const fallback = fallbackPayload();
+    return {
+      ...fallback,
+      generatedAt: new Date().toISOString(),
+      sourceMode: roadCctv?.length ? "live-partial" : fallback.sourceMode,
+      sources: roadCctv?.length ? [...new Set([...fallback.sources, "기상청 CCTV 기반 도로날씨정보"])] : fallback.sources,
+      roadCctv: roadCctv?.length ? roadCctv : fallback.roadCctv,
+    };
+  }
 
   const alertSeed = officialAlerts === null
     ? bestAlertCache([localCache, deployedCache, bestExisting])?.alerts ?? []
@@ -833,6 +1059,7 @@ async function livePayload() {
     sources: [...sourceSet],
     operationUpdates: updates,
     alerts: liveAlerts(updates, alertSeed),
+    roadCctv: roadCctv?.length ? roadCctv : bestExisting?.roadCctv ?? localCache?.roadCctv ?? deployedCache?.roadCctv ?? [],
   };
 }
 
@@ -856,6 +1083,7 @@ async function alertOnlyPayload() {
     sourceMode: officialAlerts?.length ? "live" : base.sourceMode ?? "fallback",
     sources: [...nextSources],
     operationUpdates: updates,
+    roadCctv: Array.isArray(base.roadCctv) ? base.roadCctv : [],
     alerts: officialAlerts !== null
       ? liveAlerts(updates, officialAlerts)
       : bestAlertCache([localCache, base])?.alerts ?? liveAlerts(updates, []),
@@ -869,7 +1097,9 @@ function hasLiveServiceKey() {
     apiKey("KMA_WARNING_SERVICE_KEY") ||
     apiKey("KASI_SERVICE_KEY") ||
     apiKey("KHOA_SERVICE_KEY") ||
-    apiKey("AIRKOREA_SERVICE_KEY"),
+    apiKey("AIRKOREA_SERVICE_KEY") ||
+    apiKey("KMA_ROAD_WEATHER_SERVICE_KEY") ||
+    apiKey("KMA_APIHUB_AUTH_KEY"),
   );
 }
 
