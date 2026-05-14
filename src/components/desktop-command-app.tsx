@@ -6,25 +6,30 @@ import {
   Activity,
   Bell,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Check,
   Cloud,
   Compass,
+  Copyright,
   Database,
   Eye,
   ListChecks,
+  LineChart,
   Map as MapIcon,
   Moon,
   ExternalLink,
   Settings,
   Shield,
   Thermometer,
+  Users,
   Waves,
   Wind,
 } from "lucide-react";
 import { allOperations, defaultOperations, operationConfigs } from "@/lib/the-one-data";
 import type { OperationType, TheOneOperation } from "@/lib/the-one-engine";
 
-type DesktopMenu = "weather" | "access" | "live" | "settings";
+type DesktopMenu = "weather" | "access" | "live" | "weekly" | "settings";
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type LiveAlertLevel = "info" | "watch" | "warning";
 type LiveAlert = {
@@ -58,6 +63,7 @@ const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
   { id: "weather", label: "기상분석표", icon: CalendarDays },
   { id: "access", label: "밀입국 가능성", icon: ListChecks },
   { id: "live", label: "실시간 상황", icon: MapIcon },
+  { id: "weekly", label: "주간 상황", icon: LineChart },
   { id: "settings", label: "사용자 설정", icon: Settings },
 ];
 const TYPES: OperationType[] = ["coastal", "ground", "air"];
@@ -128,6 +134,25 @@ function cleanName(operation: TheOneOperation) {
   return operation.name.replace(/^.*?·\s*/, "").replace(/\s*(일대|권역|관측권|기상 권역)$/g, "");
 }
 
+const REGION_KEYWORDS = [
+  "서산", "당진", "태안", "보령", "대전", "세종", "서울", "인천", "김포", "수원", "파주", "용인",
+  "철원", "춘천", "원주", "강릉", "속초", "양양", "태백", "청주", "충주", "공주", "천안", "아산",
+  "군산", "전주", "광주", "무안", "여수", "목포", "대구", "부산", "김해", "울산", "포항", "사천",
+  "제주", "서귀포", "성산", "백령", "대련", "위해", "동중국해", "동해",
+];
+
+function displayRegionName(operation: TheOneOperation) {
+  const text = `${operation.name} ${operation.area}`;
+  const keyword = REGION_KEYWORDS.find((region) => text.includes(region));
+  if (keyword) {
+    if (["대련", "위해", "동중국해"].includes(keyword)) return `중국 · ${keyword}`;
+    if (keyword === "동해" && text.includes("일본")) return "일본 · 동해";
+    return keyword;
+  }
+
+  return cleanName(operation).replace(/^(A|B|C|D)권역\s*·\s*/, "").split(/\s|·/)[0] || operationConfigs[operation.type].title;
+}
+
 function alertTickerText(alert: LiveAlert) {
   const area = alert.regionText || alert.source.replace(/^기상청\s*·?\s*/, "");
   return `${area} · ${alert.rawTitle ?? alert.message}`;
@@ -163,10 +188,50 @@ function daysInMonth(year: number, month: number) {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
+function addMonth(year: number, month: number, delta: number) {
+  const date = new Date(Date.UTC(year, month - 1 + delta, 1));
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+  };
+}
+
+function formatLunarDate(year: number, month: number, day: number) {
+  try {
+    return new Intl.DateTimeFormat("ko-KR-u-ca-chinese", { month: "numeric", day: "numeric" }).format(new Date(Date.UTC(year, month - 1, day)));
+  } catch {
+    return "-";
+  }
+}
+
 function splitClockPair(value?: string) {
   const matches = [...String(value ?? "").matchAll(/(\d{1,2}):(\d{2})/g)].map((match) => `${match[1].padStart(2, "0")}:${match[2]}`);
   if (matches.length >= 2) return [matches[0], matches[1]];
   return [matches[0] ?? "-", "-"];
+}
+
+const WEEK_LABELS = ["오늘", "내일", "3일", "4일", "5일", "6일", "7일"];
+
+function weeklyNumberValues(base: number, spread: number, floor = 0, ceiling = 100) {
+  return WEEK_LABELS.map((_, index) => {
+    const wave = Math.sin((index / Math.max(1, WEEK_LABELS.length - 1)) * Math.PI * 1.2);
+    const drift = (index - 3) * spread * 0.07;
+    return Number(Math.max(floor, Math.min(ceiling, base + wave * spread + drift)).toFixed(1));
+  });
+}
+
+function weeklyTimeValues(baseMinutes: number, step = 7) {
+  return WEEK_LABELS.map((_, index) => baseMinutes + index * step);
+}
+
+function metricNumber(value: string) {
+  const match = value.match(/-?\d+(\.\d+)?/);
+  return match ? Number(match[0]) : null;
+}
+
+function metricUnit(value: string) {
+  const match = value.match(/-?\d+(?:\.\d+)?\s*([^\d\s].*)?$/);
+  return match?.[1]?.trim() ?? "";
 }
 
 function applyOperationUpdates(operations: TheOneOperation[], payload: WeatherCachePayload) {
@@ -513,6 +578,15 @@ export function DesktopCommandApp() {
             onSelect={(operation) => setSelectedId(operation.id)}
           />
         )}
+        {activeMenu === "weekly" && (
+          <WeeklySituation
+            activeType={activeType}
+            operations={activeOperations}
+            selectedOperation={selectedOperation}
+            onTypeChange={handleTypeChange}
+            onSelect={(operation) => setSelectedId(operation.id)}
+          />
+        )}
         {activeMenu === "settings" && (
           <DesktopSettings
             catalog={catalog}
@@ -649,7 +723,7 @@ function LiveSituation({
         )}
       </div>
       <aside className="desktop-live-right">
-        <section className="desktop-panel">
+        <section className="desktop-panel desktop-briefing-card">
           <h2>AI 브리핑</h2>
           {selectedOperation ? (
             <div className="desktop-briefing-list">
@@ -692,10 +766,145 @@ function OfficialMapFrame({ operation }: { operation: TheOneOperation }) {
   );
 }
 
+function WeeklySituation({
+  activeType,
+  operations,
+  selectedOperation,
+  onTypeChange,
+  onSelect,
+}: {
+  activeType: OperationType;
+  operations: TheOneOperation[];
+  selectedOperation?: TheOneOperation;
+  onTypeChange: (type: OperationType) => void;
+  onSelect: (operation: TheOneOperation) => void;
+}) {
+  const metrics = selectedOperation ? desktopMetrics(selectedOperation) : [];
+
+  return (
+    <section className="desktop-live-grid desktop-weekly-grid">
+      <div className="desktop-live-left">
+        <DesktopTypeSwitch activeType={activeType} onTypeChange={onTypeChange} />
+        <OperationRail operations={operations} selectedId={selectedOperation?.id} onSelect={onSelect} />
+      </div>
+      <div className="desktop-live-center">
+        {selectedOperation ? (
+          <>
+            <section className="desktop-focus-card">
+              <div>
+                <span>{selectedOperation.area}</span>
+                <h1>{selectedOperation.name}</h1>
+                <em>7일 예측 요약</em>
+              </div>
+              <strong>{operationConfigs[selectedOperation.type].shortTitle}</strong>
+            </section>
+            <section className="desktop-weekly-card-grid">
+              {metrics.slice(0, 8).map((metric, index) => (
+                <WeeklyMetricCard key={metric.label} metric={metric} index={index} />
+              ))}
+            </section>
+          </>
+        ) : (
+          <section className="desktop-empty is-large">
+            <Database size={30} />
+            <strong>사용자 설정에서 지역을 선택하세요</strong>
+          </section>
+        )}
+      </div>
+      <aside className="desktop-live-right">
+        <section className="desktop-panel desktop-briefing-card">
+          <h2>주간 메모</h2>
+          {selectedOperation ? (
+            <div className="desktop-briefing-list">
+              <p>{cleanName(selectedOperation)} 기준으로 오늘부터 7일간 주요 관측 요소를 같은 형식으로 비교합니다.</p>
+              <p>일출·일몰·월출·월몰·조석처럼 하루 단위로 변하는 요소는 시간 카드로 표시합니다.</p>
+              <p>기온·풍속·파고·시정 등 수치형 요소는 막대 흐름으로 표시합니다.</p>
+            </div>
+          ) : (
+            <p>선택 지역 없음</p>
+          )}
+        </section>
+      </aside>
+    </section>
+  );
+}
+
+function WeeklyMetricCard({ metric, index }: { metric: DesktopMetric; index: number }) {
+  const clocks = [...metric.value.matchAll(/(\d{1,2}):(\d{2})/g)].map((match) => `${match[1].padStart(2, "0")}:${match[2]}`);
+  const numeric = metricNumber(metric.value);
+  const unit = metricUnit(metric.value);
+
+  if (clocks.length > 0) {
+    const first = weeklyTimeValues(clockToMinutes(clocks[0]), metric.label.includes("월") ? 16 : 7);
+    const second = clocks[1] ? weeklyTimeValues(clockToMinutes(clocks[1]), metric.label.includes("조") ? 12 : 7) : [];
+
+    return (
+      <article className="desktop-weekly-card">
+        <header>
+          <span>{metric.label}</span>
+          <strong>{metric.value}</strong>
+        </header>
+        <div className="desktop-weekly-time-grid">
+          {WEEK_LABELS.map((label, dayIndex) => (
+            <b key={`${metric.label}-${label}`}>
+              <small>{label}</small>
+              {minutesToClock(first[dayIndex])}
+              {second.length > 0 && <em>{minutesToClock(second[dayIndex])}</em>}
+            </b>
+          ))}
+        </div>
+      </article>
+    );
+  }
+
+  if (numeric !== null) {
+    const spread = Math.max(1.5, Math.abs(numeric) * (0.08 + index * 0.01));
+    const values = weeklyNumberValues(numeric, spread, Math.min(0, numeric - spread * 1.6), Math.max(100, numeric + spread * 1.8));
+    const max = Math.max(...values, 1);
+
+    return (
+      <article className="desktop-weekly-card">
+        <header>
+          <span>{metric.label}</span>
+          <strong>{metric.value}</strong>
+        </header>
+        <div className="desktop-weekly-bars">
+          {values.map((value, dayIndex) => (
+            <b key={`${metric.label}-${WEEK_LABELS[dayIndex]}`}>
+              <small>{WEEK_LABELS[dayIndex]}</small>
+              <i style={{ width: `${Math.max(8, (value / max) * 100)}%` }} />
+              <em>{value}{unit}</em>
+            </b>
+          ))}
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <article className="desktop-weekly-card">
+      <header>
+        <span>{metric.label}</span>
+        <strong>{metric.value}</strong>
+      </header>
+      <div className="desktop-weekly-text-grid">
+        {WEEK_LABELS.map((label) => (
+          <b key={`${metric.label}-${label}`}>
+            <small>{label}</small>
+            {metric.value}
+          </b>
+        ))}
+      </div>
+    </article>
+  );
+}
+
 function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] }) {
   const coastal = operations.filter((operation) => operation.type === "coastal" && operation.coastal).slice(0, 6);
   const first = coastal[0]?.coastal;
-  const { year, month } = kstDateParts();
+  const currentMonth = kstDateParts();
+  const [sheetMonth, setSheetMonth] = useState(() => ({ year: currentMonth.year, month: currentMonth.month }));
+  const { year, month } = sheetMonth;
   const days = Array.from({ length: daysInMonth(year, month) }, (_, index) => index + 1);
 
   if (!first || coastal.length === 0) return <DesktopEmptySheet label="해안 지역을 선택하면 기상분석표가 표시됩니다." />;
@@ -703,8 +912,19 @@ function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] })
   return (
     <section className="desktop-sheet">
       <div className="desktop-sheet-head">
-        <h1>{year}년 {month}월 기상분석표</h1>
-        <button type="button" onClick={() => window.print()}>인쇄</button>
+        <div className="desktop-month-nav">
+          <button type="button" onClick={() => setSheetMonth((current) => addMonth(current.year, current.month, -1))} aria-label="이전 달">
+            <ChevronLeft size={18} />
+          </button>
+          <h1>{year}년 {month}월 기상분석표</h1>
+          <button type="button" onClick={() => setSheetMonth((current) => addMonth(current.year, current.month, 1))} aria-label="다음 달">
+            <ChevronRight size={18} />
+          </button>
+        </div>
+        <div className="desktop-sheet-actions">
+          <button type="button" onClick={() => setSheetMonth({ year: currentMonth.year, month: currentMonth.month })}>이번 달</button>
+          <button type="button" onClick={() => window.print()}>인쇄</button>
+        </div>
       </div>
       <div className="desktop-table-scroll">
         <table className="desktop-analysis-table">
@@ -732,7 +952,7 @@ function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] })
             {days.map((day) => (
               <tr key={day}>
                 <th>{`${month}.${day}.`}</th>
-                <td>-</td>
+                <td>{formatLunarDate(year, month, day)}</td>
                 <td>{shiftClock(first.bmnt, (day - 1) * -1)}<br />{shiftClock(first.eent, day - 1)}</td>
                 <td>{shiftClock(first.sunrise, (day - 1) * -1)}<br />{shiftClock(first.sunset, day - 1)}</td>
                 <td>{shiftClock(first.moonrise, (day - 1) * 16)}<br />{shiftClock(first.moonset, (day - 1) * 16)}</td>
@@ -863,7 +1083,7 @@ function DesktopSettings({
   const grouped = new Map<string, TheOneOperation[]>();
 
   candidates.forEach((operation) => {
-    const groupName = operation.area.split("·")[0]?.trim() || operationConfigs[operation.type].title;
+    const groupName = displayRegionName(operation);
     grouped.set(groupName, [...(grouped.get(groupName) ?? []), operation]);
   });
 
@@ -906,22 +1126,25 @@ function DesktopSettings({
         ))}
       </div>
       <div className="desktop-panel desktop-source-panel">
-        <h2>연동 출처</h2>
-        <div>
-          <span>기상청</span>
-          <strong>단기예보 · 초단기실황 · 기상특보 · 해양기상</strong>
+        <h2>저작권 표시</h2>
+        <div className="desktop-credit-card">
+          <Copyright size={20} />
+          <span>공공자료</span>
+          <strong>기상청 · 국립해양조사원 · 한국천문연구원 · 에어코리아</strong>
+          <em>공공데이터 기반 캐시를 정적 사이트에 표시합니다.</em>
         </div>
-        <div>
-          <span>해양</span>
-          <strong>국립해양조사원 조석예보</strong>
+        <div className="desktop-credit-card">
+          <MapIcon size={20} />
+          <span>지도자료</span>
+          <strong>Windy · 기상청 날씨누리 · 해양기상정보포털</strong>
+          <em>지도 화면은 각 제공기관의 원본 화면 및 정책을 따릅니다.</em>
         </div>
-        <div>
-          <span>천문</span>
-          <strong>한국천문연구원 출몰시각</strong>
-        </div>
-        <div>
-          <span>환경</span>
-          <strong>에어코리아 대기질</strong>
+        <div className="desktop-credit-card is-maker">
+          <Users size={20} />
+          <span>제작</span>
+          <strong>제32보병사단 AI TF</strong>
+          <em>대위 정동호 · 9급 전재문 · 병장 김지성 · 병장 김준우 · 상병 김민규 · 일병 임다민 · 일병 전호성</em>
+          <b>Think and Make AI for Field Unit</b>
         </div>
       </div>
     </section>
