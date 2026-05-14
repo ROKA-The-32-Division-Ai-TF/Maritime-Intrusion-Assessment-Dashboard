@@ -750,6 +750,18 @@ function fallbackPayload() {
   };
 }
 
+function alertCacheScore(cache) {
+  const alerts = Array.isArray(cache?.alerts) ? cache.alerts : [];
+  const enrichedCount = alerts.filter((item) => item?.regionText || (Array.isArray(item?.targetIds) && item.targetIds.length > 0)).length;
+  return alerts.length + enrichedCount * 10;
+}
+
+function bestAlertCache(caches) {
+  return caches
+    .filter((cache) => Array.isArray(cache?.alerts))
+    .sort((first, second) => alertCacheScore(second) - alertCacheScore(first))[0];
+}
+
 function liveAlerts(updates, officialAlerts = []) {
   const alerts = [...officialAlerts];
   const targetById = new Map(operationTargets.map((target) => [target.id, target]));
@@ -809,7 +821,7 @@ async function livePayload() {
   if (updates.length === 0) return fallbackPayload();
 
   const alertSeed = officialAlerts === null
-    ? Array.isArray(bestExisting?.alerts) ? bestExisting.alerts : []
+    ? bestAlertCache([localCache, deployedCache, bestExisting])?.alerts ?? []
     : officialAlerts;
 
   return {
@@ -831,6 +843,7 @@ async function alertOnlyPayload() {
   const base = current ?? fallbackPayload();
   const updates = Array.isArray(base.operationUpdates) ? base.operationUpdates : [];
   const nextSources = new Set(Array.isArray(base.sources) ? base.sources : []);
+  const localCache = await loadLocalCache();
 
   if (officialAlerts?.length) nextSources.add("기상청 기상특보");
 
@@ -844,9 +857,7 @@ async function alertOnlyPayload() {
     operationUpdates: updates,
     alerts: officialAlerts !== null
       ? liveAlerts(updates, officialAlerts)
-      : Array.isArray(base.alerts)
-        ? base.alerts
-        : liveAlerts(updates, []),
+      : bestAlertCache([localCache, base])?.alerts ?? liveAlerts(updates, []),
   };
 }
 
