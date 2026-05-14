@@ -13,8 +13,8 @@ import {
   Eye,
   ListChecks,
   Map as MapIcon,
-  Menu,
   Moon,
+  ExternalLink,
   Settings,
   Shield,
   Thermometer,
@@ -145,6 +145,19 @@ function shiftClock(value: string, minutes: number) {
   return minutesToClock(clockToMinutes(value) + minutes);
 }
 
+function kstDateParts(date = new Date()) {
+  const kstDate = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  return {
+    year: kstDate.getUTCFullYear(),
+    month: kstDate.getUTCMonth() + 1,
+    day: kstDate.getUTCDate(),
+  };
+}
+
+function daysInMonth(year: number, month: number) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
 function splitClockPair(value?: string) {
   const matches = [...String(value ?? "").matchAll(/(\d{1,2}):(\d{2})/g)].map((match) => `${match[1].padStart(2, "0")}:${match[2]}`);
   if (matches.length >= 2) return [matches[0], matches[1]];
@@ -184,8 +197,8 @@ function applyOperationUpdates(operations: TheOneOperation[], payload: WeatherCa
 
 function windyEmbedUrl(operation: TheOneOperation) {
   const [lat, lon] = operation.center ?? [36.5, 126.5];
-  const overlay = operation.type === "coastal" ? "waves" : operation.type === "air" ? "wind" : "rain";
-  const zoom = operation.type === "coastal" ? "7" : "8";
+  const overlay = operation.type === "coastal" ? "waves" : "wind";
+  const zoom = operation.type === "coastal" ? "7" : operation.type === "ground" ? "9" : "8";
   const params = new URLSearchParams({
     lat: `${lat}`,
     lon: `${lon}`,
@@ -196,7 +209,7 @@ function windyEmbedUrl(operation: TheOneOperation) {
     overlay,
     product: "ecmwf",
     marker: "true",
-    message: "true",
+    message: "false",
     calendar: "now",
     type: "map",
     location: "coordinates",
@@ -207,8 +220,25 @@ function windyEmbedUrl(operation: TheOneOperation) {
   return `https://embed.windy.com/embed2.html?${params.toString()}`;
 }
 
-function kmaMapUrl(operation: TheOneOperation) {
-  return operation.type === "coastal" ? KMA_MARINE_MAP_URL : KMA_WEATHER_MAP_URL;
+function windyPageUrl(operation: TheOneOperation) {
+  const [lat, lon] = operation.center ?? [36.5, 126.5];
+  const zoom = operation.type === "coastal" ? "7" : operation.type === "ground" ? "9" : "8";
+  return `https://www.windy.com/?${lat},${lon},${zoom}`;
+}
+
+function officialMapLinks(operation: TheOneOperation) {
+  const common = [
+    { label: "기상청 종합지도", href: KMA_WEATHER_MAP_URL },
+  ];
+
+  if (operation.type === "coastal") {
+    return [
+      { label: "해양기상 특보지도", href: KMA_MARINE_MAP_URL },
+      ...common,
+    ];
+  }
+
+  return common;
 }
 
 function desktopMetrics(operation: TheOneOperation): DesktopMetric[] {
@@ -353,8 +383,23 @@ function useDesktopData() {
   return { catalog, alerts };
 }
 
+function useKstClock() {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return {
+    date: now.toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" }),
+    time: now.toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour12: false }),
+  };
+}
+
 export function DesktopCommandApp() {
   const { catalog, alerts } = useDesktopData();
+  const clock = useKstClock();
   const [activeMenu, setActiveMenu] = useState<DesktopMenu>("live");
   const [activeType, setActiveType] = useState<OperationType>("coastal");
   const [selectedIds, setSelectedIds] = useState<string[]>(defaultOperations.map((operation) => operation.id));
@@ -400,11 +445,6 @@ export function DesktopCommandApp() {
     () => filterAlertsForOperation(alerts, activeType, selectedOperation),
     [activeType, alerts, selectedOperation],
   );
-  const activeMenuLabel = MENUS.find((menu) => menu.id === activeMenu)?.label ?? "";
-  const topbarTitle = activeMenu === "weather" || activeMenu === "access" ? "백룡 작전기상 분석체계" : activeMenuLabel;
-  const topbarSubTitle = activeMenu === "weather" || activeMenu === "access"
-    ? "Baekryong Operational Weather Analysis System"
-    : "제32보병사단 AI TF";
 
   function handleTypeChange(type: OperationType) {
     const first = selectedOperations.find((operation) => operation.type === type) ?? catalog.find((operation) => operation.type === type);
@@ -431,9 +471,14 @@ export function DesktopCommandApp() {
           <img src={assetUrl("22.svg")} alt="" />
           <div>
             <span>제32보병사단</span>
-            <strong>백룡 작전기상 분석체계</strong>
-            <em>Baekryong Operational Weather Analysis System</em>
+            <strong>백룡 작전기상</strong>
+            <em>Operational Weather Analysis</em>
           </div>
+        </div>
+        <div className="desktop-clock">
+          <span>KST</span>
+          <strong>{clock.time}</strong>
+          <em>{clock.date}</em>
         </div>
         <nav className="desktop-menu" aria-label="데스크톱 메뉴">
           {MENUS.map((item) => {
@@ -452,16 +497,6 @@ export function DesktopCommandApp() {
         </div>
       </aside>
       <main className="desktop-main">
-        <header className={cx("desktop-topbar", (activeMenu === "weather" || activeMenu === "access") && "is-sheet")}>
-          <button type="button" aria-label="메뉴">
-            <Menu size={21} />
-          </button>
-          <div>
-            <strong>{topbarTitle}</strong>
-            <span>{topbarSubTitle} · {new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul", hour12: false })}</span>
-          </div>
-          <img src={assetUrl("22.svg")} alt="" />
-        </header>
         {activeMenu === "weather" && <WeatherAnalysisSheet operations={selectedOperations} />}
         {activeMenu === "access" && <AccessAssessmentSheet operations={selectedOperations} />}
         {activeMenu === "live" && (
@@ -595,11 +630,12 @@ function LiveSituation({
               <article>
                 <span>윈디</span>
                 <iframe src={windyEmbedUrl(selectedOperation)} title={`${selectedOperation.name} 윈디`} loading="lazy" />
+                <a className="desktop-map-launch" href={windyPageUrl(selectedOperation)} target="_blank" rel="noreferrer">
+                  지도 열기
+                  <ExternalLink size={14} />
+                </a>
               </article>
-              <article>
-                <span>기상청</span>
-                <iframe src={kmaMapUrl(selectedOperation)} title={`${selectedOperation.name} 기상청`} loading="lazy" />
-              </article>
+              <OfficialMapCard operation={selectedOperation} />
             </section>
           </>
         ) : (
@@ -640,17 +676,47 @@ function LiveSituation({
   );
 }
 
+function OfficialMapCard({ operation }: { operation: TheOneOperation }) {
+  const metrics = desktopMetrics(operation).slice(0, 6);
+
+  return (
+    <article className="desktop-official-map-card">
+      <span>공식지도</span>
+      <div>
+        <strong>기상청 지도</strong>
+      </div>
+      <div className="desktop-official-map-metrics">
+        {metrics.map((metric) => (
+          <b key={metric.label}>
+            <small>{metric.label}</small>
+            {metric.value}
+          </b>
+        ))}
+      </div>
+      <div className="desktop-official-map-links">
+        {officialMapLinks(operation).map((link) => (
+          <a key={link.href} href={link.href} target="_blank" rel="noreferrer">
+            {link.label}
+            <ExternalLink size={15} />
+          </a>
+        ))}
+      </div>
+    </article>
+  );
+}
+
 function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] }) {
   const coastal = operations.filter((operation) => operation.type === "coastal" && operation.coastal).slice(0, 6);
   const first = coastal[0]?.coastal;
-  const days = Array.from({ length: 10 }, (_, index) => index);
+  const { year, month } = kstDateParts();
+  const days = Array.from({ length: daysInMonth(year, month) }, (_, index) => index + 1);
 
   if (!first || coastal.length === 0) return <DesktopEmptySheet label="해안 지역을 선택하면 기상분석표가 표시됩니다." />;
 
   return (
     <section className="desktop-sheet">
       <div className="desktop-sheet-head">
-        <h1>2026년 5월 기상분석표</h1>
+        <h1>{year}년 {month}월 기상분석표</h1>
         <button type="button" onClick={() => window.print()}>인쇄</button>
       </div>
       <div className="desktop-table-scroll">
@@ -678,19 +744,19 @@ function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] })
           <tbody>
             {days.map((day) => (
               <tr key={day}>
-                <th>{`5.${14 + day}.`}</th>
-                <td>{`4.${27 + day}.`}</td>
-                <td>{shiftClock(first.bmnt, day * -1)}<br />{shiftClock(first.eent, day)}</td>
-                <td>{shiftClock(first.sunrise, day * -1)}<br />{shiftClock(first.sunset, day)}</td>
-                <td>{shiftClock(first.moonrise, day * 16)}<br />{shiftClock(first.moonset, day * 16)}</td>
-                <td>{Math.max(0, Math.min(100, first.moonlightPercent + day * 3))}%</td>
-                <td>{`${((Number.parseInt(first.tideAge, 10) || 7) + day - 1) % 15 + 1}물`}</td>
+                <th>{`${month}.${day}.`}</th>
+                <td>-</td>
+                <td>{shiftClock(first.bmnt, (day - 1) * -1)}<br />{shiftClock(first.eent, day - 1)}</td>
+                <td>{shiftClock(first.sunrise, (day - 1) * -1)}<br />{shiftClock(first.sunset, day - 1)}</td>
+                <td>{shiftClock(first.moonrise, (day - 1) * 16)}<br />{shiftClock(first.moonset, (day - 1) * 16)}</td>
+                <td>{Math.max(0, Math.min(100, first.moonlightPercent + (day - 1) * 3))}%</td>
+                <td>{`${((Number.parseInt(first.tideAge, 10) || 7) + day - 2) % 15 + 1}물`}</td>
                 {coastal.flatMap((operation) => {
                   const high = splitClockPair(operation.coastal?.highTide);
                   const low = splitClockPair(operation.coastal?.lowTide);
                   return [
-                    <td key={`${operation.id}-${day}-high`}>{high.map((time) => shiftClock(time, day * 12)).join(" / ")}</td>,
-                    <td key={`${operation.id}-${day}-low`}>{low.map((time) => shiftClock(time, day * 12)).join(" / ")}</td>,
+                    <td key={`${operation.id}-${day}-high`}>{high.map((time) => shiftClock(time, (day - 1) * 12)).join(" / ")}</td>,
+                    <td key={`${operation.id}-${day}-low`}>{low.map((time) => shiftClock(time, (day - 1) * 12)).join(" / ")}</td>,
                   ];
                 })}
               </tr>
@@ -806,6 +872,7 @@ function DesktopSettings({
   onSelectAllType: () => void;
 }) {
   const candidates = catalog.filter((operation) => operation.type === activeType);
+  const activeSelectedCount = candidates.filter((operation) => selectedIds.includes(operation.id)).length;
   const grouped = new Map<string, TheOneOperation[]>();
 
   candidates.forEach((operation) => {
@@ -815,8 +882,11 @@ function DesktopSettings({
 
   return (
     <section className="desktop-settings-grid">
-      <div className="desktop-panel">
-        <h2>지역 설정</h2>
+      <div className="desktop-panel desktop-settings-toolbar">
+        <div>
+          <h2>지역 설정</h2>
+          <p>{operationConfigs[activeType].title} {activeSelectedCount}개 선택</p>
+        </div>
         <DesktopTypeSwitch activeType={activeType} onTypeChange={onTypeChange} />
         <div className="desktop-settings-actions">
           <button type="button" onClick={onSelectAllType}>현재 분류 전체</button>
@@ -826,10 +896,10 @@ function DesktopSettings({
       </div>
       <div className="desktop-catalog-panel">
         {[...grouped.entries()].map(([groupName, items]) => (
-          <details key={groupName} open={groupName.includes("충청") || groupName.includes("서산")}>
+          <details key={groupName} open={items.some((operation) => selectedIds.includes(operation.id))}>
             <summary>
               <strong>{groupName}</strong>
-              <span>{items.length}</span>
+              <span>{items.filter((operation) => selectedIds.includes(operation.id)).length}/{items.length}</span>
             </summary>
             <div className="desktop-catalog-grid">
               {items.map((operation) => {
