@@ -850,6 +850,17 @@ async function alertOnlyPayload() {
   };
 }
 
+function hasLiveServiceKey() {
+  return Boolean(
+    apiKey("PUBLIC_DATA_SERVICE_KEY") ||
+    apiKey("KMA_SERVICE_KEY") ||
+    apiKey("KMA_WARNING_SERVICE_KEY") ||
+    apiKey("KASI_SERVICE_KEY") ||
+    apiKey("KHOA_SERVICE_KEY") ||
+    apiKey("AIRKOREA_SERVICE_KEY"),
+  );
+}
+
 async function main() {
   let payload;
 
@@ -857,7 +868,9 @@ async function main() {
     if (env("WEATHER_CACHE_REFRESH_SCOPE") === "alerts") {
       payload = await alertOnlyPayload();
     } else {
-      payload = (await loadPreparedFeed()) ?? await livePayload();
+      payload = hasLiveServiceKey()
+        ? await livePayload()
+        : (await loadPreparedFeed()) ?? await livePayload();
     }
   } catch (error) {
     console.warn(error instanceof Error ? error.message : error);
