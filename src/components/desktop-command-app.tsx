@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
   Activity,
   Bell,
@@ -69,11 +69,8 @@ const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
   { id: "settings", label: "사용자 설정", icon: Settings },
 ];
 const TYPES: OperationType[] = ["coastal", "ground", "air"];
-const KMA_DATA_API_URL = "https://data.kma.go.kr/api/selectApiList.do";
-const KMA_WEATHER_MAP_URL = "https://www.weather.go.kr/wgis-nuri/html/map.html#";
-const KMA_MARINE_MAP_URL = "https://marine.kma.go.kr/mmis/?menuId=sig_wh";
-const KMA_RADAR_URL = "https://www.weather.go.kr/w/weather/radar/radar.do";
-const KMA_ROAD_WEATHER_URL = "https://rwis.kma.go.kr/";
+const MAP_ZOOM_MIN = 4;
+const MAP_ZOOM_MAX = 11;
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -160,6 +157,35 @@ function displayRegionName(operation: TheOneOperation) {
   }
 
   return cleanName(operation).replace(/^(A|B|C|D)권역\s*·\s*/, "").split(/\s|·/)[0] || operationConfigs[operation.type].title;
+}
+
+function catalogLocationParts(operation: TheOneOperation) {
+  const text = `${operation.name} ${operation.area}`;
+  const city = displayRegionName(operation);
+
+  if (text.includes("중국")) return { province: "국외", city: "중국", detail: city };
+  if (text.includes("일본")) return { province: "국외", city: "일본", detail: city };
+  if (["서울", "인천", "김포", "수원", "파주", "용인", "백령"].some((keyword) => text.includes(keyword))) {
+    return { province: "수도권", city, detail: operation.area };
+  }
+  if (["철원", "춘천", "원주", "강릉", "속초", "양양", "태백"].some((keyword) => text.includes(keyword))) {
+    return { province: "강원권", city, detail: operation.area };
+  }
+  if (["서산", "당진", "태안", "보령", "대전", "세종", "청주", "충주", "공주", "천안", "아산"].some((keyword) => text.includes(keyword))) {
+    return { province: "충청권", city, detail: operation.area };
+  }
+  if (["군산", "전주", "광주", "무안", "여수", "목포"].some((keyword) => text.includes(keyword))) {
+    return { province: "호남권", city, detail: operation.area };
+  }
+  if (["대구", "부산", "김해", "울산", "포항", "사천"].some((keyword) => text.includes(keyword))) {
+    return { province: "영남권", city, detail: operation.area };
+  }
+  if (["제주", "서귀포", "성산"].some((keyword) => text.includes(keyword))) {
+    return { province: "제주권", city, detail: operation.area };
+  }
+
+  const fallbackProvince = operation.type === "coastal" ? "기타 해상" : operation.type === "ground" ? "기타 육상" : "기타 공중";
+  return { province: fallbackProvince, city, detail: operation.area };
 }
 
 function alertTickerText(alert: LiveAlert) {
@@ -325,12 +351,20 @@ function mercatorPixel(lat: number, lon: number, zoom: number) {
   };
 }
 
+function latLonFromMercatorPixel(x: number, y: number, zoom: number): [number, number] {
+  const scale = 256 * 2 ** zoom;
+  const lon = (x / scale) * 360 - 180;
+  const n = Math.PI - (2 * Math.PI * y) / scale;
+  const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+  return [Math.max(-85, Math.min(85, lat)), lon];
+}
+
 function vworldTileUrl(x: number, y: number, zoom: number) {
   if (!VWORLD_API_KEY) return "";
   return `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_API_KEY}/Base/${zoom}/${y}/${x}.png`;
 }
 
-function mapCenter(operations: TheOneOperation[], fallback?: TheOneOperation) {
+function mapCenter(operations: TheOneOperation[], fallback?: TheOneOperation): [number, number] {
   const centers = operations.map((operation) => operation.center).filter(Boolean) as [number, number][];
   if (centers.length === 0) return fallback?.center ?? ([36.7, 126.6] as [number, number]);
   return [
@@ -339,14 +373,29 @@ function mapCenter(operations: TheOneOperation[], fallback?: TheOneOperation) {
   ] as [number, number];
 }
 
-function operationLinkItems(operation: TheOneOperation) {
-  const mapUrl = operation.type === "coastal" ? KMA_MARINE_MAP_URL : KMA_WEATHER_MAP_URL;
-  return [
-    { label: "기상지도", href: mapUrl },
-    { label: "CCTV", href: KMA_ROAD_WEATHER_URL },
-    { label: "레이더", href: KMA_RADAR_URL },
-    { label: "API", href: KMA_DATA_API_URL },
-  ];
+function fittedMapView(operations: TheOneOperation[], fallback?: TheOneOperation) {
+  const centers = operations.map((operation) => operation.center).filter(Boolean) as [number, number][];
+  if (centers.length === 0) return { center: fallback?.center ?? ([36.7, 126.6] as [number, number]), zoom: 7 };
+
+  const latitudes = centers.map((center) => center[0]);
+  const longitudes = centers.map((center) => center[1]);
+  const latSpan = Math.max(...latitudes) - Math.min(...latitudes);
+  const lonSpan = Math.max(...longitudes) - Math.min(...longitudes);
+  const span = Math.max(latSpan * 1.45, lonSpan);
+  let zoom = 9;
+
+  if (span > 18) zoom = 4;
+  else if (span > 9) zoom = 5;
+  else if (span > 4.5) zoom = 6;
+  else if (span > 2.2) zoom = 7;
+  else if (span > 1.1) zoom = 8;
+
+  return { center: mapCenter(operations, fallback), zoom };
+}
+
+function mapAlertsForOperations(alerts: LiveAlert[], operations: TheOneOperation[]) {
+  const matched = alerts.filter((alert) => operations.some((operation) => alertMatchesOperation(alert, operation.type, operation)));
+  return (matched.length > 0 ? matched : alerts).slice(0, 5);
 }
 
 function applyOperationUpdates(operations: TheOneOperation[], payload: WeatherCachePayload) {
@@ -409,10 +458,6 @@ function windyPageUrl(operation: TheOneOperation) {
   const [lat, lon] = operation.center ?? [36.5, 126.5];
   const zoom = operation.type === "coastal" ? "7" : operation.type === "ground" ? "9" : "8";
   return `https://www.windy.com/?${lat},${lon},${zoom}`;
-}
-
-function officialMapUrl(operation: TheOneOperation) {
-  return operation.type === "coastal" ? KMA_MARINE_MAP_URL : KMA_WEATHER_MAP_URL;
 }
 
 function desktopMetrics(operation: TheOneOperation): DesktopMetric[] {
@@ -822,6 +867,7 @@ function OperationRegionStatus({
       </div>
       <div className="desktop-vworld-panel">
         <VworldMap
+          key={mapOperations.map((operation) => operation.id).join("|")}
           operations={mapOperations}
           selectedOperation={popupOperation}
           alerts={alerts}
@@ -833,7 +879,6 @@ function OperationRegionStatus({
       </div>
       <aside className="desktop-region-side">
         <OperationPopup operation={popupOperation} alerts={alerts} />
-        <ApiPreparationPanel />
       </aside>
     </section>
   );
@@ -850,19 +895,50 @@ function VworldMap({
   alerts: LiveAlert[];
   onSelect: (operation: TheOneOperation) => void;
 }) {
-  const zoom = selectedOperation?.type === "air" ? 8 : 9;
-  const center = mapCenter(operations, selectedOperation);
+  const fittedView = useMemo(() => fittedMapView(operations, selectedOperation), [operations, selectedOperation]);
+  const [view, setView] = useState(fittedView);
+  const dragRef = useRef<{ x: number; y: number; center: [number, number] } | null>(null);
+
+  const zoom = view.zoom;
+  const center = view.center;
   const centerPixel = mercatorPixel(center[0], center[1], zoom);
   const centerTile = { x: Math.floor(centerPixel.x / 256), y: Math.floor(centerPixel.y / 256) };
-  const tiles = Array.from({ length: 5 }, (_, row) => (
-    Array.from({ length: 5 }, (__, col) => ({
-      x: centerTile.x + col - 2,
-      y: centerTile.y + row - 2,
+  const tiles = Array.from({ length: 7 }, (_, row) => (
+    Array.from({ length: 7 }, (__, col) => ({
+      x: centerTile.x + col - 3,
+      y: centerTile.y + row - 3,
     }))
   )).flat();
+  const mapAlerts = mapAlertsForOperations(alerts, operations);
+
+  function zoomBy(delta: number) {
+    setView((current) => ({ ...current, zoom: Math.max(MAP_ZOOM_MIN, Math.min(MAP_ZOOM_MAX, current.zoom + delta)) }));
+  }
 
   return (
-    <section className="desktop-vworld-map">
+    <section
+      className="desktop-vworld-map"
+      onPointerDown={(event) => {
+        dragRef.current = { x: event.clientX, y: event.clientY, center };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        if (!dragRef.current) return;
+        const startPixel = mercatorPixel(dragRef.current.center[0], dragRef.current.center[1], zoom);
+        const dx = event.clientX - dragRef.current.x;
+        const dy = event.clientY - dragRef.current.y;
+        setView((current) => ({
+          ...current,
+          center: latLonFromMercatorPixel(startPixel.x - dx, startPixel.y - dy, zoom),
+        }));
+      }}
+      onPointerUp={() => {
+        dragRef.current = null;
+      }}
+      onPointerCancel={() => {
+        dragRef.current = null;
+      }}
+    >
       <div className="desktop-vworld-tiles" aria-hidden="true">
         {tiles.map((tile) => (
           VWORLD_API_KEY ? (
@@ -879,6 +955,27 @@ function VworldMap({
         ))}
       </div>
       <div className="desktop-vworld-shade" />
+      <div
+        className="desktop-map-controls"
+        aria-label="지도 조작"
+        onPointerDown={(event) => event.stopPropagation()}
+        onPointerMove={(event) => event.stopPropagation()}
+        onPointerUp={(event) => event.stopPropagation()}
+      >
+        <button type="button" onClick={() => zoomBy(1)} aria-label="지도 확대">+</button>
+        <button type="button" onClick={() => zoomBy(-1)} aria-label="지도 축소">-</button>
+        <button type="button" onClick={() => setView(fittedView)}>전체</button>
+      </div>
+      <div className="desktop-vworld-alerts" aria-label="지도 특보현황">
+        <strong>특보현황</strong>
+        {mapAlerts.length > 0 ? (
+          mapAlerts.map((alert) => (
+            <span key={`map-alert-${alert.id}`}>{alert.regionText || alert.source} · {alert.rawTitle ?? alert.title}</span>
+          ))
+        ) : (
+          <span>현재 표시할 특보가 없습니다.</span>
+        )}
+      </div>
       {operations.map((operation) => {
         if (!operation.center) return null;
         const point = mercatorPixel(operation.center[0], operation.center[1], zoom);
@@ -901,10 +998,6 @@ function VworldMap({
           </button>
         );
       })}
-      <div className="desktop-vworld-badge">
-        <strong>{VWORLD_API_KEY ? "VWorld" : "지도키 필요"}</strong>
-        <span>선택 지역 {operations.length}개</span>
-      </div>
     </section>
   );
 }
@@ -922,7 +1015,6 @@ function OperationPopup({ operation, alerts }: { operation?: TheOneOperation; al
   const metrics = desktopMetrics(operation).slice(0, 10);
   const astro = operationAstronomy(operation);
   const activeAlerts = alertsForOperation(alerts, operation);
-  const linkItems = operationLinkItems(operation);
 
   return (
     <section className="desktop-panel desktop-region-popup">
@@ -946,14 +1038,6 @@ function OperationPopup({ operation, alerts }: { operation?: TheOneOperation; al
           <em>월출 {astro.moonrise} · 월몰 {astro.moonset} · BMNT {astro.bmnt} · EENT {astro.eent}</em>
         </div>
       )}
-      <div className="desktop-region-actions">
-        {linkItems.map((item) => (
-          <a key={item.label} href={item.href} target="_blank" rel="noreferrer">
-            {item.label}
-            <ExternalLink size={13} />
-          </a>
-        ))}
-      </div>
       <div className="desktop-region-metric-list">
         {metrics.map((metric) => (
           <article key={metric.label}>
@@ -962,26 +1046,6 @@ function OperationPopup({ operation, alerts }: { operation?: TheOneOperation; al
             <em>{metric.helper}</em>
           </article>
         ))}
-      </div>
-    </section>
-  );
-}
-
-function ApiPreparationPanel() {
-  return (
-    <section className="desktop-panel desktop-api-panel">
-      <h2>API 연결 준비</h2>
-      <div>
-        <strong>실시간</strong>
-        <span>기온 · 습도 · 강수 · 지상풍 · 기상특보 · CCTV</span>
-      </div>
-      <div>
-        <strong>주기 갱신</strong>
-        <span>조석 · 일출/일몰 · 월출/월몰 · 월광 · 대기질</span>
-      </div>
-      <div>
-        <strong>추가 키 필요</strong>
-        <span>기상자료개방포털 CCTV/영상 · ASOS/AWS 시정 · 고층/항공기상 · 레이더/낙뢰</span>
       </div>
     </section>
   );
@@ -1072,7 +1136,7 @@ function LiveSituation({
                   <ExternalLink size={14} />
                 </a>
               </article>
-              <OfficialMapFrame operation={selectedOperation} />
+              <WeatherImageryPanel operation={selectedOperation} />
             </section>
           </>
         ) : (
@@ -1113,15 +1177,43 @@ function LiveSituation({
   );
 }
 
-function OfficialMapFrame({ operation }: { operation: TheOneOperation }) {
-  const url = officialMapUrl(operation);
+function WeatherImageryPanel({ operation }: { operation: TheOneOperation }) {
+  const items = operation.type === "coastal"
+    ? [
+        ["해양특보", "풍랑·안개·시정"],
+        ["위성영상", "구름·해무"],
+        ["레이더", "강수 이동"],
+        ["해수욕장 날씨", "연안 관측"],
+      ]
+    : operation.type === "ground"
+      ? [
+          ["레이더", "강수 이동"],
+          ["위성영상", "구름 분포"],
+          ["생활기상지수", "온열·자외선"],
+          ["낙뢰관측", "뇌우 감시"],
+        ]
+      : [
+          ["레이더", "강수 회피"],
+          ["위성영상", "구름대"],
+          ["낙뢰관측", "비행 제한"],
+          ["고층기상", "상층풍"],
+        ];
+
   return (
-    <article>
-      <iframe src={url} title={`${operation.name} 공식 기상 화면`} loading="lazy" sandbox="allow-same-origin allow-scripts allow-forms" />
-      <a className="desktop-map-launch" href={url} target="_blank" rel="noreferrer">
-        크게 보기
-        <ExternalLink size={14} />
-      </a>
+    <article className="desktop-imagery-panel">
+      <header>
+        <span>기상 영상자료</span>
+        <strong>{cleanName(operation)}</strong>
+      </header>
+      <div>
+        {items.map(([label, helper]) => (
+          <b key={label}>
+            <small>{label}</small>
+            <em>{helper}</em>
+          </b>
+        ))}
+      </div>
+      <p>GitHub Actions 캐시 연동 후 영상·관측 썸네일을 이 영역에 표시합니다.</p>
     </article>
   );
 }
@@ -1356,14 +1448,44 @@ function AccessAssessmentSheet({ operations }: { operations: TheOneOperation[] }
   const coastal = operations.filter((operation) => operation.type === "coastal" && operation.coastal);
   const outbound = coastal.filter((operation) => operation.name.includes("중국") || operation.area.includes("황해")).slice(0, 4);
   const inbound = coastal.filter((operation) => !operation.name.includes("중국")).slice(0, 6);
+  const currentDate = kstDateParts();
+  const [sheetDate, setSheetDate] = useState(() => currentDate);
+  const displayDate = new Date(Date.UTC(sheetDate.year, sheetDate.month - 1, sheetDate.day, 12));
 
   if (coastal.length === 0) return <DesktopEmptySheet label="해안 지역을 선택하면 판단표가 표시됩니다." />;
 
   return (
     <section className="desktop-sheet">
       <div className="desktop-sheet-head">
-        <h1>2026년 5월 14일 밀입국 가능성 판단표</h1>
-        <button type="button" onClick={() => window.print()}>인쇄</button>
+        <div className="desktop-month-nav">
+          <button
+            type="button"
+            onClick={() => {
+              const previous = new Date(displayDate);
+              previous.setUTCDate(previous.getUTCDate() - 1);
+              setSheetDate(kstDateParts(previous));
+            }}
+            aria-label="이전 날짜"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <h1>{sheetDate.year}년 {sheetDate.month}월 {sheetDate.day}일 밀입국 가능성 판단표</h1>
+          <button
+            type="button"
+            onClick={() => {
+              const next = new Date(displayDate);
+              next.setUTCDate(next.getUTCDate() + 1);
+              setSheetDate(kstDateParts(next));
+            }}
+            aria-label="다음 날짜"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+        <div className="desktop-sheet-actions">
+          <button type="button" onClick={() => setSheetDate(currentDate)}>오늘</button>
+          <button type="button" onClick={() => window.print()}>인쇄</button>
+        </div>
       </div>
       <AssessmentBlock title="출항 가능여부 평가 지표" rows={outbound.length > 0 ? outbound : coastal.slice(0, 2)} />
       <AssessmentBlock title="접안 가능여부 평가 지표" rows={inbound.length > 0 ? inbound : coastal.slice(0, 4)} />
@@ -1374,10 +1496,12 @@ function AccessAssessmentSheet({ operations }: { operations: TheOneOperation[] }
 function AssessmentBlock({ title, rows }: { title: string; rows: TheOneOperation[] }) {
   return (
     <section className="desktop-assessment-block">
-      <h2>{title}</h2>
       <div className="desktop-table-scroll">
         <table className="desktop-assessment-table">
           <thead>
+            <tr className="desktop-assessment-title-row">
+              <th colSpan={10}>{title}</th>
+            </tr>
             <tr>
               <th rowSpan={2}>구분</th>
               <th colSpan={2}>기상</th>
@@ -1455,11 +1579,13 @@ function DesktopSettings({
 }) {
   const candidates = catalog.filter((operation) => operation.type === activeType);
   const activeSelectedCount = candidates.filter((operation) => selectedIds.includes(operation.id)).length;
-  const grouped = new Map<string, TheOneOperation[]>();
+  const grouped = new Map<string, Map<string, TheOneOperation[]>>();
 
   candidates.forEach((operation) => {
-    const groupName = displayRegionName(operation);
-    grouped.set(groupName, [...(grouped.get(groupName) ?? []), operation]);
+    const parts = catalogLocationParts(operation);
+    const province = grouped.get(parts.province) ?? new Map<string, TheOneOperation[]>();
+    province.set(parts.city, [...(province.get(parts.city) ?? []), operation]);
+    grouped.set(parts.province, province);
   });
 
   return (
@@ -1477,28 +1603,44 @@ function DesktopSettings({
         </div>
       </div>
       <div className="desktop-catalog-panel">
-        {[...grouped.entries()].map(([groupName, items]) => (
-          <details key={groupName} open={items.some((operation) => selectedIds.includes(operation.id))}>
-            <summary>
-              <strong>{groupName}</strong>
-              <span>{items.filter((operation) => selectedIds.includes(operation.id)).length}/{items.length}</span>
-            </summary>
-            <div className="desktop-catalog-grid">
-              {items.map((operation) => {
-                const checked = selectedIds.includes(operation.id);
-                const Icon = operationIcon(operation.type);
+        {[...grouped.entries()].map(([provinceName, cityMap]) => {
+          const provinceItems = [...cityMap.values()].flat();
 
-                return (
-                  <button key={operation.id} type="button" className={checked ? "is-selected" : ""} onClick={() => onToggle(operation.id)}>
-                    <Icon size={18} />
-                    <span>{operation.name}</span>
-                    {checked && <Check size={16} />}
-                  </button>
-                );
-              })}
+          return (
+          <details key={provinceName} open={provinceItems.some((operation) => selectedIds.includes(operation.id))}>
+            <summary>
+              <strong>{provinceName}</strong>
+              <span>{provinceItems.filter((operation) => selectedIds.includes(operation.id)).length}/{provinceItems.length}</span>
+            </summary>
+            <div className="desktop-catalog-city-list">
+              {[...cityMap.entries()].map(([cityName, items]) => (
+                <details key={`${provinceName}-${cityName}`} open={items.some((operation) => selectedIds.includes(operation.id))}>
+                  <summary>
+                    <strong>{cityName}</strong>
+                    <span>{items.filter((operation) => selectedIds.includes(operation.id)).length}/{items.length}</span>
+                  </summary>
+                  <div className="desktop-catalog-grid">
+                    {items.map((operation) => {
+                      const checked = selectedIds.includes(operation.id);
+                      const Icon = operationIcon(operation.type);
+                      const parts = catalogLocationParts(operation);
+
+                      return (
+                        <button key={operation.id} type="button" className={checked ? "is-selected" : ""} onClick={() => onToggle(operation.id)}>
+                          <Icon size={18} />
+                          <span>{cleanName(operation)}</span>
+                          <em>{parts.detail}</em>
+                          {checked && <Check size={16} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </details>
+              ))}
             </div>
           </details>
-        ))}
+        );
+        })}
       </div>
       <div className="desktop-panel desktop-source-panel">
         <h2>저작권 표시</h2>
@@ -1507,12 +1649,6 @@ function DesktopSettings({
           <span>공공자료</span>
           <strong>기상청 · 국립해양조사원 · 한국천문연구원 · 에어코리아 · 브이월드</strong>
           <em>공공데이터 기반 캐시를 정적 사이트에 표시합니다.</em>
-        </div>
-        <div className="desktop-credit-card">
-          <Database size={20} />
-          <span>API 확장 대기</span>
-          <strong>CCTV 도로날씨 · 레이더/위성 · 생활기상지수 · 태풍 · 영향예보 · GTS · 낙뢰 · 고층기상 · 해수욕장 날씨</strong>
-          <em>키는 GitHub Actions Secrets에서만 읽고, 프론트엔드 코드에는 저장하지 않습니다.</em>
         </div>
         <div className="desktop-credit-card">
           <MapIcon size={20} />

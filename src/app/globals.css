@@ -2495,7 +2495,7 @@ body:has(.desktop-app) {
   min-height: 0;
   width: 100%;
   display: grid;
-  grid-template-columns: 250px minmax(520px, 1fr) 310px;
+  grid-template-columns: minmax(210px, 0.75fr) minmax(0, 2fr) minmax(260px, 0.9fr);
   gap: 16px;
 }
 
@@ -2503,14 +2503,14 @@ body:has(.desktop-app) {
   min-height: 0;
   width: 100%;
   display: grid;
-  grid-template-columns: 250px minmax(620px, 1fr) 330px;
+  grid-template-columns: minmax(210px, 0.72fr) minmax(0, 2.25fr) minmax(260px, 0.88fr);
   gap: 16px;
 }
 
 .desktop-region-grid .desktop-operation-rail button {
   border-color: rgba(255, 255, 255, 0.64);
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(232, 240, 255, 0.64));
+    linear-gradient(135deg, rgba(255, 255, 255, 0.58), rgba(232, 240, 255, 0.34));
   box-shadow: 0 16px 36px rgba(9, 26, 60, 0.16);
   backdrop-filter: blur(14px);
 }
@@ -2518,7 +2518,7 @@ body:has(.desktop-app) {
 .desktop-region-grid .desktop-operation-rail button.is-active {
   background:
     radial-gradient(circle at 100% 0%, rgba(37, 74, 165, 0.15), transparent 38%),
-    rgba(233, 240, 255, 0.82);
+    rgba(233, 240, 255, 0.62);
 }
 
 .desktop-live-left,
@@ -2749,6 +2749,65 @@ body:has(.desktop-app) {
   display: block;
 }
 
+.desktop-imagery-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 18px;
+  background:
+    radial-gradient(circle at 92% 8%, rgba(37, 74, 165, 0.16), transparent 34%),
+    linear-gradient(145deg, #f8fbff, #e7f0ff) !important;
+}
+
+.desktop-imagery-panel header {
+  display: grid;
+  gap: 4px;
+}
+
+.desktop-imagery-panel header span,
+.desktop-imagery-panel p {
+  margin: 0;
+  color: var(--desktop-muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.desktop-imagery-panel header strong {
+  color: var(--desktop-blue);
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.desktop-imagery-panel > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.desktop-imagery-panel b {
+  display: grid;
+  gap: 4px;
+  min-height: 78px;
+  align-content: center;
+  padding: 12px;
+  border: 1px solid #d8e5f8;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.desktop-imagery-panel small {
+  color: #10203a;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.desktop-imagery-panel em {
+  color: var(--desktop-muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 850;
+}
+
 .desktop-vworld-panel {
   min-height: 0;
   overflow: hidden;
@@ -2761,9 +2820,16 @@ body:has(.desktop-app) {
 .desktop-vworld-map {
   position: relative;
   height: calc(100dvh - 48px);
-  min-height: 620px;
+  min-height: 560px;
   overflow: hidden;
   background: #d7e5f4;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.desktop-vworld-map:active {
+  cursor: grabbing;
 }
 
 .desktop-vworld-tiles img {
@@ -2783,29 +2849,69 @@ body:has(.desktop-app) {
   pointer-events: none;
 }
 
-.desktop-vworld-badge {
+.desktop-map-controls {
   position: absolute;
-  left: 18px;
-  bottom: 18px;
+  right: 16px;
+  top: 16px;
   z-index: 3;
-  display: grid;
-  gap: 3px;
-  padding: 12px 14px;
+  display: flex;
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.54);
+  border-radius: 16px;
+  background: rgba(7, 18, 42, 0.54);
+  backdrop-filter: blur(14px);
+}
+
+.desktop-map-controls button {
+  min-width: 38px;
+  height: 36px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--desktop-blue);
+  font-weight: 950;
+}
+
+.desktop-vworld-alerts {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.48);
   border-radius: 18px;
-  background: rgba(4, 15, 34, 0.74);
+  background: rgba(7, 18, 42, 0.58);
   color: white;
   backdrop-filter: blur(14px);
 }
 
-.desktop-vworld-badge strong {
-  font-size: 14px;
+.desktop-vworld-alerts strong,
+.desktop-vworld-alerts span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.desktop-vworld-alerts strong {
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 12px;
   font-weight: 950;
 }
 
-.desktop-vworld-badge span {
-  color: rgba(255, 255, 255, 0.74);
+.desktop-vworld-alerts span {
+  max-width: 360px;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.86);
   font-size: 12px;
   font-weight: 850;
+  text-overflow: ellipsis;
 }
 
 .desktop-map-marker {
@@ -2818,7 +2924,7 @@ body:has(.desktop-app) {
   gap: 4px;
   border: 0;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.66);
   color: #172238;
   padding: 9px 10px;
   box-shadow: 0 14px 34px rgba(8, 22, 48, 0.24);
@@ -2854,7 +2960,7 @@ body:has(.desktop-app) {
 }
 
 .desktop-map-marker.has-alert {
-  background: #fff6e1;
+  background: rgba(255, 246, 225, 0.78);
   outline: 2px solid #f8c13d;
 }
 
@@ -2911,27 +3017,6 @@ body:has(.desktop-app) {
   color: #4a5b77;
   font-size: 12px;
   font-weight: 900;
-}
-
-.desktop-region-actions {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.desktop-region-actions a {
-  min-height: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  border: 1px solid #d8e5f8;
-  border-radius: 13px;
-  background: #f5f8ff;
-  color: var(--desktop-blue);
-  font-size: 12px;
-  font-weight: 950;
-  text-decoration: none;
 }
 
 .desktop-astro-card,
@@ -3409,40 +3494,7 @@ body:has(.desktop-app) {
 .desktop-assessment-block {
   min-height: 0;
   display: grid;
-  gap: 8px;
-}
-
-.desktop-assessment-block h2 {
-  margin: 0;
-  position: relative;
-  width: min(760px, 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  justify-self: center;
-  min-height: 48px;
-  padding: 0 28px;
-  border-radius: 18px;
-  border: 1px solid #b9cff4;
-  background:
-    linear-gradient(90deg, rgba(37, 74, 165, 0), rgba(37, 74, 165, 0.13), rgba(37, 74, 165, 0)),
-    white;
-  color: var(--desktop-blue);
-  box-shadow: 0 16px 34px rgba(37, 74, 165, 0.13);
-  font-size: 21px;
-  line-height: 1.1;
-  font-weight: 950;
-  text-align: center;
-}
-
-.desktop-assessment-block h2::before,
-.desktop-assessment-block h2::after {
-  content: "";
-  width: 58px;
-  height: 2px;
-  margin: 0 16px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, var(--desktop-blue), transparent);
+  gap: 10px;
 }
 
 .desktop-analysis-table,
@@ -3475,6 +3527,15 @@ body:has(.desktop-app) {
   color: #07111f;
   font-size: 14px;
   font-weight: 950;
+}
+
+.desktop-assessment-title-row th {
+  height: 46px;
+  background:
+    linear-gradient(90deg, #bcd6ff, #e3efff 28%, #e3efff 72%, #bcd6ff) !important;
+  color: var(--desktop-blue) !important;
+  font-size: 20px !important;
+  letter-spacing: 0;
 }
 
 .desktop-analysis-table tbody th,
@@ -3615,9 +3676,27 @@ body:has(.desktop-app) {
   font-weight: 950;
 }
 
+.desktop-catalog-city-list {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.desktop-catalog-city-list details {
+  margin: 0;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.desktop-catalog-city-list summary strong {
+  color: #213a67;
+  font-size: 13px;
+}
+
 .desktop-catalog-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   padding-top: 10px;
 }
@@ -3641,12 +3720,25 @@ body:has(.desktop-app) {
   background: var(--desktop-blue-soft);
 }
 
-.desktop-catalog-grid span {
+.desktop-catalog-grid span,
+.desktop-catalog-grid em {
   overflow: hidden;
-  font-size: 13px;
-  font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.desktop-catalog-grid span {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.desktop-catalog-grid em {
+  grid-column: 2 / -1;
+  margin-top: -4px;
+  color: var(--desktop-muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
 }
 
 .desktop-source-panel {
@@ -3993,12 +4085,6 @@ body:has(.desktop-app) {
     gap: 4px;
   }
 
-  .desktop-assessment-block h2 {
-    min-height: 28px;
-    box-shadow: none;
-    font-size: 16px;
-  }
-
   .desktop-table-scroll {
     overflow: visible;
     border-radius: 0;
@@ -4025,5 +4111,10 @@ body:has(.desktop-app) {
   .desktop-analysis-table thead th,
   .desktop-assessment-table thead th {
     font-size: 8.5px;
+  }
+
+  .desktop-assessment-title-row th {
+    height: 22px;
+    font-size: 10px !important;
   }
 }
