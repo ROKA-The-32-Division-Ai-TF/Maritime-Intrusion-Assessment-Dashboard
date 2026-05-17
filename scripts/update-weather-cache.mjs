@@ -8,27 +8,52 @@ const KMA_NCST_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/
 const KMA_FCST_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst";
 const KMA_WARNING_URL = "https://apis.data.go.kr/1360000/WthrWrnInfoService/getWthrWrnList";
 const KMA_WARNING_MSG_URL = "https://apis.data.go.kr/1360000/WthrWrnInfoService/getWthrWrnMsg";
+const KMA_ASOS_HOURLY_URL = "https://apis.data.go.kr/1360000/AsosHourlyInfoService/getWthrDataList";
 const AIRKOREA_URL = "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty";
 const KASI_RISE_SET_URL = "https://apis.data.go.kr/B090041/openapi/service/RiseSetInfoService/getAreaRiseSetInfo";
 const KHOA_TIDE_URL = "https://khoa.go.kr/oceandata/odmiapi/GetTideFcstHghLwApiService.do";
+const KHOA_TIDE_RECENT_URL = "https://www.khoa.go.kr/api/oceangrid/tideObsRecent/search.do";
+const KHOA_TIDE_TEMP_URL = "https://www.khoa.go.kr/api/oceangrid/tideObsTemp/search.do";
+const KHOA_CURRENT_URL = "https://www.khoa.go.kr/api/oceangrid/fcTidalCurrent/search.do";
 const KMA_ROAD_CCTV_URL = "https://apihub.kma.go.kr/api/typ01/url/cctv_ana_info.php";
 const KMA_ROAD_CCTV_INFO_URL = "https://apihub.kma.go.kr/api/typ01/url/cctv_road_info.php";
+const KMA_WIND_PROFILER_URL = "https://apihub.kma.go.kr/api/typ01/url/kma_wpf.php";
 const DEFAULT_DEPLOYED_CACHE_URL = "https://roka-the-32-division-ai-tf.github.io/Maritime-Intrusion-Assessment-Dashboard/data/weather-cache.json";
 
 const operationTargets = [
-  { id: "coastal-seosan", type: "coastal", name: "서산 권역 · 대산 연안", lat: 37.005, lon: 126.352, location: "서산", airStation: "대산", tideObsCode: "DT_0017", tideEnv: "KHOA_TIDE_OBS_CODE_SEOSAN" },
-  { id: "coastal-dangjin", type: "coastal", name: "당진 권역 · 장고항 일대", lat: 36.96, lon: 126.84, location: "당진", airStation: "당진시청사", tideObsCode: "SO_1270", tideEnv: "KHOA_TIDE_OBS_CODE_DANGJIN" },
-  { id: "coastal-taean", type: "coastal", name: "태안 권역 · 안흥항 일대", lat: 36.75, lon: 126.29, location: "태안", airStation: "태안읍", tideObsCode: "DT_0067", tideEnv: "KHOA_TIDE_OBS_CODE_TAEAN" },
-  { id: "coastal-boryeong", type: "coastal", name: "보령 권역 · 대천항 일대", lat: 36.33, lon: 126.61, location: "보령", airStation: "대천2동", tideObsCode: "DT_0025", tideEnv: "KHOA_TIDE_OBS_CODE_BORYEONG" },
-  { id: "ground-land-seosan", type: "ground", name: "서산시 기상 권역", lat: 36.784, lon: 126.45, location: "서산", airStation: "독곶리" },
+  { id: "coastal-seosan", type: "coastal", name: "서산 권역 · 대산 연안", lat: 37.005, lon: 126.352, location: "서산", airStation: "대산", asosStn: "129", tideObsCode: "DT_0017", tideEnv: "KHOA_TIDE_OBS_CODE_SEOSAN", currentEnv: "KHOA_CURRENT_OBS_CODE_SEOSAN", tempEnv: "KHOA_TEMP_OBS_CODE_SEOSAN" },
+  { id: "coastal-dangjin", type: "coastal", name: "당진 권역 · 장고항 일대", lat: 36.96, lon: 126.84, location: "당진", airStation: "당진시청사", tideObsCode: "SO_1270", tideEnv: "KHOA_TIDE_OBS_CODE_DANGJIN", currentEnv: "KHOA_CURRENT_OBS_CODE_DANGJIN", tempEnv: "KHOA_TEMP_OBS_CODE_DANGJIN" },
+  { id: "coastal-taean", type: "coastal", name: "태안 권역 · 안흥항 일대", lat: 36.75, lon: 126.29, location: "태안", airStation: "태안읍", tideObsCode: "DT_0067", tideEnv: "KHOA_TIDE_OBS_CODE_TAEAN", currentEnv: "KHOA_CURRENT_OBS_CODE_TAEAN", tempEnv: "KHOA_TEMP_OBS_CODE_TAEAN" },
+  { id: "coastal-boryeong", type: "coastal", name: "보령 권역 · 대천항 일대", lat: 36.33, lon: 126.61, location: "보령", airStation: "대천2동", asosStn: "235", tideObsCode: "DT_0025", tideEnv: "KHOA_TIDE_OBS_CODE_BORYEONG", currentEnv: "KHOA_CURRENT_OBS_CODE_BORYEONG", tempEnv: "KHOA_TEMP_OBS_CODE_BORYEONG" },
+  { id: "ground-land-seosan", type: "ground", name: "서산시 기상 권역", lat: 36.784, lon: 126.45, location: "서산", airStation: "독곶리", asosStn: "129" },
   { id: "ground-land-dangjin", type: "ground", name: "당진시 기상 권역", lat: 36.893, lon: 126.629, location: "당진", airStation: "당진시청사" },
   { id: "ground-land-taean", type: "ground", name: "태안군 기상 권역", lat: 36.745, lon: 126.298, location: "태안", airStation: "태안읍" },
-  { id: "ground-land-boryeong", type: "ground", name: "보령시 기상 권역", lat: 36.333, lon: 126.612, location: "보령", airStation: "대천2동" },
-  { id: "air-A-A", type: "air", name: "A권역 · 서해 연안 공역", lat: 36.78, lon: 126.45, location: "서산", airStation: "독곶리" },
-  { id: "air-A-B", type: "air", name: "B권역 · 내륙 회랑", lat: 36.62, lon: 127.12, location: "공주", airStation: "공주" },
-  { id: "air-A-C", type: "air", name: "C권역 · 도심 관측권", lat: 36.35, lon: 127.38, location: "대전", airStation: "둔산동" },
-  { id: "air-A-D", type: "air", name: "D권역 · 산악 난류권", lat: 36.95, lon: 127.68, location: "충주", airStation: "칠금동" },
+  { id: "ground-land-boryeong", type: "ground", name: "보령시 기상 권역", lat: 36.333, lon: 126.612, location: "보령", airStation: "대천2동", asosStn: "235" },
+  { id: "air-A-A", type: "air", name: "A권역 · 서해 연안 공역", lat: 36.78, lon: 126.45, location: "서산", airStation: "독곶리", asosStn: "129" },
+  { id: "air-A-B", type: "air", name: "B권역 · 내륙 회랑", lat: 36.62, lon: 127.12, location: "공주", airStation: "공주", asosStn: "133" },
+  { id: "air-A-C", type: "air", name: "C권역 · 도심 관측권", lat: 36.35, lon: 127.38, location: "대전", airStation: "둔산동", asosStn: "133" },
+  { id: "air-A-D", type: "air", name: "D권역 · 산악 난류권", lat: 36.95, lon: 127.68, location: "충주", airStation: "칠금동", asosStn: "127" },
 ];
+
+await loadLocalEnv();
+
+async function loadLocalEnv() {
+  for (const filename of [".env.local", ".env"]) {
+    try {
+      const text = await readFile(join(rootDir, filename), "utf8");
+      text.split(/\r?\n/).forEach((line) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#") || !trimmed.includes("=")) return;
+        const [key, ...valueParts] = trimmed.split("=");
+        const name = key.trim();
+        if (!name || process.env[name]) return;
+        process.env[name] = valueParts.join("=").trim().replace(/^['"]|['"]$/g, "");
+      });
+    } catch {
+      // Local env files are optional; GitHub Actions provides the same values as Secrets.
+    }
+  }
+}
 
 function env(name) {
   return process.env[name]?.trim() || "";
@@ -596,6 +621,200 @@ async function fetchTide(target) {
   };
 }
 
+function firstValue(item, keys) {
+  for (const key of keys) {
+    const value = item?.[key] ?? item?.[key.toUpperCase()] ?? item?.[key.toLowerCase()];
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+  }
+
+  return undefined;
+}
+
+function khoaItems(json) {
+  const candidates = [
+    json?.result?.data,
+    json?.result?.item,
+    json?.result,
+    json?.body?.items?.item,
+    json?.response?.body?.items?.item,
+    json?.data,
+    json?.items,
+  ];
+  const value = candidates.find((candidate) => candidate !== undefined && candidate !== null);
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function latestByTime(items) {
+  return [...items].sort((first, second) => {
+    const timeKeys = ["tm", "TM", "record_time", "obs_time", "obsTime", "predcDt", "PREDC_DT", "date_time", "time"];
+    const firstTime = String(firstValue(first, timeKeys) ?? "");
+    const secondTime = String(firstValue(second, timeKeys) ?? "");
+    return secondTime.localeCompare(firstTime);
+  })[0];
+}
+
+function normalizeCurrentKt(value) {
+  const speed = safeNumber(value, NaN);
+  if (!Number.isFinite(speed)) return undefined;
+  if (speed > 10) return Number((speed * 0.0194384).toFixed(1));
+  return Number(speed.toFixed(1));
+}
+
+function normalizeDirection(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return undefined;
+  const numeric = Number(text);
+  if (Number.isFinite(numeric)) return windDirectionLabel(numeric);
+  return text.replace(/도$/, "");
+}
+
+async function fetchTideRecent(target) {
+  const serviceKey = apiKey("KHOA_TIDE_RECENT_SERVICE_KEY") || apiKey("KHOA_SERVICE_KEY") || apiKey("PUBLIC_DATA_SERVICE_KEY");
+  const obsCode = (target.tideEnv ? env(target.tideEnv) : "") || target.tideObsCode;
+  if (!serviceKey || !obsCode) return null;
+
+  const json = await fetchJson(KHOA_TIDE_RECENT_URL, {
+    ServiceKey: serviceKey,
+    ObsCode: obsCode,
+    ResultType: "json",
+  });
+  const item = latestByTime(khoaItems(json));
+  if (!item) return null;
+
+  const values = {};
+  const waterTempC = safeNumber(firstValue(item, ["water_temp", "waterTemp", "wtemp", "temp", "WTEMP"]), NaN);
+  const windSpeedMs = safeNumber(firstValue(item, ["wind_speed", "windSpeed", "ws", "WS"]), NaN);
+  const windDirection = normalizeDirection(firstValue(item, ["wind_dir", "windDirection", "wd", "WD"]));
+  const currentSpeedKt = normalizeCurrentKt(firstValue(item, ["current_speed", "currentSpeed", "cs", "CURRENT_SPEED"]));
+  const currentDirection = normalizeDirection(firstValue(item, ["current_dir", "currentDirection", "cd", "CURRENT_DIR"]));
+
+  if (Number.isFinite(waterTempC)) values.waterTempC = Number(waterTempC.toFixed(1));
+  if (Number.isFinite(windSpeedMs)) values.windSpeedMs = Number(windSpeedMs.toFixed(1));
+  if (windDirection) values.windDirection = windDirection;
+  if (currentSpeedKt !== undefined) values.currentSpeedKt = currentSpeedKt;
+  if (currentDirection) values.currentDirection = currentDirection;
+
+  return Object.keys(values).length > 0
+    ? { source: "국립해양조사원 조위관측소 최신 관측데이터", values }
+    : null;
+}
+
+async function fetchWaterTemp(target) {
+  const serviceKey = apiKey("KHOA_WATER_TEMP_SERVICE_KEY") || apiKey("KHOA_SERVICE_KEY") || apiKey("PUBLIC_DATA_SERVICE_KEY");
+  const obsCode = (target.tempEnv ? env(target.tempEnv) : "") || (target.tideEnv ? env(target.tideEnv) : "") || target.tideObsCode;
+  if (!serviceKey || !obsCode) return null;
+
+  const json = await fetchJson(KHOA_TIDE_TEMP_URL, {
+    ServiceKey: serviceKey,
+    ObsCode: obsCode,
+    Date: ymd(kstNow()),
+    ResultType: "json",
+  });
+  const item = latestByTime(khoaItems(json));
+  if (!item) return null;
+
+  const waterTempC = safeNumber(firstValue(item, ["water_temp", "waterTemp", "wtemp", "temp", "WTEMP"]), NaN);
+  return Number.isFinite(waterTempC)
+    ? { source: "국립해양조사원 조위관측소 실측 수온", values: { waterTempC: Number(waterTempC.toFixed(1)) } }
+    : null;
+}
+
+async function fetchTidalCurrent(target) {
+  const serviceKey = apiKey("KHOA_CURRENT_SERVICE_KEY") || apiKey("KHOA_SERVICE_KEY") || apiKey("PUBLIC_DATA_SERVICE_KEY");
+  const obsCode = (target.currentEnv ? env(target.currentEnv) : "") || target.currentObsCode || target.tideObsCode;
+  if (!serviceKey || !obsCode) return null;
+
+  const json = await fetchJson(KHOA_CURRENT_URL, {
+    ServiceKey: serviceKey,
+    ObsCode: obsCode,
+    Date: ymd(kstNow()),
+    ResultType: "json",
+  });
+  const item = latestByTime(khoaItems(json));
+  if (!item) return null;
+
+  const currentSpeedKt = normalizeCurrentKt(firstValue(item, ["current_speed", "currentSpeed", "cs", "speed", "CURRENT_SPEED"]));
+  const currentDirection = normalizeDirection(firstValue(item, ["current_dir", "currentDirection", "cd", "dir", "CURRENT_DIR"]));
+  const values = {};
+  if (currentSpeedKt !== undefined) values.currentSpeedKt = currentSpeedKt;
+  if (currentDirection) values.currentDirection = currentDirection;
+
+  return Object.keys(values).length > 0
+    ? { source: "국립해양조사원 조류예보 시계열", values }
+    : null;
+}
+
+async function fetchAsosHourly(target) {
+  const serviceKey = apiKey("KMA_ASOS_SERVICE_KEY") || apiKey("KMA_SERVICE_KEY") || apiKey("PUBLIC_DATA_SERVICE_KEY");
+  if (!serviceKey || !target.asosStn) return null;
+
+  const base = kstNow(-90);
+  const json = await fetchJson(KMA_ASOS_HOURLY_URL, {
+    serviceKey,
+    pageNo: "1",
+    numOfRows: "10",
+    dataType: "JSON",
+    dataCd: "ASOS",
+    dateCd: "HR",
+    startDt: ymd(base),
+    startHh: String(base.getUTCHours()).padStart(2, "0"),
+    endDt: ymd(kstNow()),
+    endHh: String(kstNow().getUTCHours()).padStart(2, "0"),
+    stnIds: target.asosStn,
+  });
+  const item = latestByTime(publicDataItems(json));
+  if (!item) return null;
+
+  const values = {};
+  const visibilityM = safeNumber(item.vs, NaN);
+  const temperatureC = safeNumber(item.ta, NaN);
+  const humidityPercent = safeNumber(item.hm, NaN);
+  const windSpeedMs = safeNumber(item.ws, NaN);
+  const windDirection = normalizeDirection(item.wd);
+  const precipitationMm = safeNumber(item.rn, NaN);
+
+  if (Number.isFinite(visibilityM)) values.visibilityKm = Number(Math.max(0.1, visibilityM / 1000).toFixed(1));
+  if (Number.isFinite(temperatureC)) values.temperatureC = Number(temperatureC.toFixed(1));
+  if (Number.isFinite(humidityPercent)) values.humidityPercent = Number(humidityPercent.toFixed(0));
+  if (Number.isFinite(windSpeedMs)) values.windSpeedMs = Number(windSpeedMs.toFixed(1));
+  if (windDirection) values.windDirection = windDirection;
+  if (Number.isFinite(precipitationMm)) values.precipitationMm = Number(precipitationMm.toFixed(1));
+
+  return Object.keys(values).length > 0
+    ? { source: "기상청 ASOS 시간자료", values }
+    : null;
+}
+
+async function fetchWindProfiler(target) {
+  const authKey = apiKey("KMA_WIND_PROFILER_SERVICE_KEY") || apiKey("KMA_UPPER_AIR_SERVICE_KEY") || apiKey("KMA_APIHUB_AUTH_KEY");
+  if (!authKey || !target.wpfStn) return null;
+
+  const text = await fetchText(KMA_WIND_PROFILER_URL, {
+    tm: ymdhm(kstNow(-60)).slice(0, 10),
+    stn: target.wpfStn,
+    mode: "L",
+    help: "1",
+    authKey,
+  });
+  const rows = parseKmaTextTable(text);
+  const row = rows.find((item) => {
+    const height = safeNumber(firstValue(item, ["HT", "HGHT", "height", "_2"]), NaN);
+    return Number.isFinite(height) && height >= 500;
+  }) ?? rows[0];
+  if (!row) return null;
+
+  const upperWindSpeedMs = safeNumber(firstValue(row, ["WS", "WSPD", "wind_speed", "_4"]), NaN);
+  const upperWindDirection = normalizeDirection(firstValue(row, ["WD", "WDIR", "wind_dir", "_3"]));
+  const values = {};
+  if (Number.isFinite(upperWindSpeedMs)) values.upperWindSpeedMs = Number(upperWindSpeedMs.toFixed(1));
+  if (upperWindDirection) values.upperWindDirection = upperWindDirection;
+
+  return Object.keys(values).length > 0
+    ? { source: "기상청 연직바람관측", values }
+    : null;
+}
+
 function parseKmaTextTable(text, fallbackHeaders = []) {
   const rows = [];
   let headers = [...fallbackHeaders];
@@ -821,19 +1040,30 @@ function airDerived(values) {
 
 async function buildOperationUpdate(target) {
   const sources = [];
-  const [kma, air, riseSet, tide] = await Promise.all([
+  const [kma, air, riseSet, tide, tideRecent, waterTemp, tidalCurrent, asos, windProfiler] = await Promise.all([
     fetchKmaNowForecast(target).catch((error) => ({ error })),
     fetchAirKorea(target).catch((error) => ({ error })),
     fetchRiseSet(target).catch((error) => ({ error })),
     fetchTide(target).catch((error) => ({ error })),
+    fetchTideRecent(target).catch((error) => ({ error })),
+    fetchWaterTemp(target).catch((error) => ({ error })),
+    fetchTidalCurrent(target).catch((error) => ({ error })),
+    fetchAsosHourly(target).catch((error) => ({ error })),
+    fetchWindProfiler(target).catch((error) => ({ error })),
   ]);
-  const kmaValues = kma?.values;
+  const kmaValues = { ...(kma?.values ?? {}), ...(asos?.values ?? {}) };
 
-  if (!kmaValues) return { update: null, sources };
+  if (!kma?.values) return { update: null, sources };
+  if (Number.isFinite(kmaValues.visibilityKm)) kmaValues.fogLevel = fogLevelFromVisibility(kmaValues.visibilityKm);
   sources.push(kma.source);
   if (air?.values) sources.push(air.source);
   if (riseSet?.values) sources.push(riseSet.source);
   if (tide?.values) sources.push(tide.source);
+  if (tideRecent?.values) sources.push(tideRecent.source);
+  if (waterTemp?.values) sources.push(waterTemp.source);
+  if (tidalCurrent?.values) sources.push(tidalCurrent.source);
+  if (asos?.values) sources.push(asos.source);
+  if (windProfiler?.values) sources.push(windProfiler.source);
 
   const common = {
     id: target.id,
@@ -849,6 +1079,10 @@ async function buildOperationUpdate(target) {
       ...marine,
       ...(riseSet?.values ?? {}),
       ...(tide?.values ?? {}),
+      ...(tideRecent?.values ?? {}),
+      ...(waterTemp?.values ?? {}),
+      ...(tidalCurrent?.values ?? {}),
+      ...(windProfiler?.values ?? {}),
     };
 
     return {
@@ -856,12 +1090,12 @@ async function buildOperationUpdate(target) {
         ...common,
         coastal: coastalValues,
         coastalEnvironment: {
-          waveHeightM: marine.waveHeightM,
-          windSpeedMs: kmaValues.windSpeedMs,
-          visibilityKm: kmaValues.visibilityKm,
+          waveHeightM: coastalValues.waveHeightM,
+          windSpeedMs: coastalValues.windSpeedMs,
+          visibilityKm: coastalValues.visibilityKm,
           weatherStatus: kmaValues.weatherStatus,
-          temperatureC: kmaValues.temperatureC,
-          fogLevel: kmaValues.fogLevel,
+          temperatureC: coastalValues.temperatureC,
+          fogLevel: fogLevelFromVisibility(coastalValues.visibilityKm),
           pmLevel: air?.values?.pmLevel,
         },
       },
@@ -881,6 +1115,7 @@ async function buildOperationUpdate(target) {
           fog: kmaValues.fogLevel,
           cloudCoverPercent: kmaValues.weatherStatus === "맑음" ? 22 : kmaValues.weatherStatus === "흐림" ? 65 : 86,
           ...(riseSet?.values ?? {}),
+          ...(windProfiler?.values ?? {}),
         },
         groundEnvironment: {
           temperatureC: kmaValues.temperatureC,
@@ -891,7 +1126,7 @@ async function buildOperationUpdate(target) {
           windDirection: kmaValues.windDirection,
           visibilityKm: kmaValues.visibilityKm,
           weatherStatus: kmaValues.weatherStatus,
-          fogLevel: kmaValues.fogLevel,
+          fogLevel: fogLevelFromVisibility(kmaValues.visibilityKm),
           ...(air?.values ?? {}),
         },
       },
@@ -914,6 +1149,7 @@ async function buildOperationUpdate(target) {
         visibilityKm: kmaValues.visibilityKm,
         humidityPercent: kmaValues.humidityPercent,
         ...derived,
+        ...(windProfiler?.values ?? {}),
       },
       aviationEnvironment: {
         averageWindSpeedMs: kmaValues.windSpeedMs,
@@ -1095,8 +1331,12 @@ function hasLiveServiceKey() {
     apiKey("PUBLIC_DATA_SERVICE_KEY") ||
     apiKey("KMA_SERVICE_KEY") ||
     apiKey("KMA_WARNING_SERVICE_KEY") ||
+    apiKey("KMA_ASOS_SERVICE_KEY") ||
     apiKey("KASI_SERVICE_KEY") ||
     apiKey("KHOA_SERVICE_KEY") ||
+    apiKey("KHOA_CURRENT_SERVICE_KEY") ||
+    apiKey("KHOA_TIDE_RECENT_SERVICE_KEY") ||
+    apiKey("KHOA_WATER_TEMP_SERVICE_KEY") ||
     apiKey("AIRKOREA_SERVICE_KEY") ||
     apiKey("KMA_ROAD_WEATHER_SERVICE_KEY") ||
     apiKey("KMA_APIHUB_AUTH_KEY"),

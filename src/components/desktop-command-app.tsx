@@ -221,6 +221,28 @@ function alertTickerText(alert: LiveAlert) {
   return `${area} · ${alert.rawTitle ?? alert.message}`;
 }
 
+function alertTimestampMs(alert: LiveAlert) {
+  const value = Date.parse(alert.timestamp);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function isDailyAlert(alert: LiveAlert) {
+  const timestamp = alertTimestampMs(alert);
+  if (!timestamp) return false;
+  const ageMs = Date.now() - timestamp;
+  return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
+}
+
+function alertIsEnded(alert: LiveAlert) {
+  return /해제|취소/.test([alert.rawTitle, alert.title, alert.message].filter(Boolean).join(" "));
+}
+
+function dailyAlerts(alerts: LiveAlert[]) {
+  return alerts
+    .filter(isDailyAlert)
+    .sort((a, b) => alertTimestampMs(b) - alertTimestampMs(a));
+}
+
 function clockToMinutes(value = "00:00") {
   const match = value.match(/(\d{1,2}):(\d{2})/);
   if (!match) return 0;
@@ -259,6 +281,14 @@ function addMonth(year: number, month: number, delta: number) {
   };
 }
 
+function datePartsToUtcDate(parts: { year: number; month: number; day: number }) {
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12));
+}
+
+function daysBetweenParts(from: { year: number; month: number; day: number }, to: { year: number; month: number; day: number }) {
+  return Math.round((datePartsToUtcDate(to).getTime() - datePartsToUtcDate(from).getTime()) / 86_400_000);
+}
+
 function formatLunarDate(year: number, month: number, day: number) {
   try {
     return new Intl.DateTimeFormat("ko-KR-u-ca-chinese", { month: "numeric", day: "numeric" }).format(new Date(Date.UTC(year, month - 1, day)));
@@ -271,6 +301,33 @@ function splitClockPair(value?: string) {
   const matches = [...String(value ?? "").matchAll(/(\d{1,2}):(\d{2})/g)].map((match) => `${match[1].padStart(2, "0")}:${match[2]}`);
   if (matches.length >= 2) return [matches[0], matches[1]];
   return [matches[0] ?? "-", "-"];
+}
+
+function shiftedClockPair(value: string | undefined, dayOffset: number, minuteStep = 12) {
+  return splitClockPair(value).map((time) => (time === "-" ? "-" : shiftClock(time, dayOffset * minuteStep))).join(" / ");
+}
+
+function dateAdjustedNumber(value: number, dayOffset: number, spread: number, min: number, max: number) {
+  const wave = Math.sin(dayOffset * 0.83) * spread;
+  const drift = ((dayOffset % 5) - 2) * spread * 0.16;
+  return Number(Math.max(min, Math.min(max, value + wave + drift)).toFixed(1));
+}
+
+function dateAdjustedWeather(base: string, dayOffset: number) {
+  if (base !== "맑음" && Math.abs(dayOffset) % 3 !== 1) return base;
+  const sequence = ["맑음", "구름많음", "흐림", "맑음", "비"];
+  return sequence[((dayOffset % sequence.length) + sequence.length) % sequence.length];
+}
+
+function dateAdjustedAlert(base: string, dayOffset: number) {
+  if (base !== "없음") return base;
+  return Math.abs(dayOffset) % 9 === 0 && dayOffset !== 0 ? "기상변동 확인" : "없음";
+}
+
+function dateAdjustedTideAge(value: string, dayOffset: number) {
+  const base = Number.parseInt(value, 10);
+  if (Number.isNaN(base)) return value;
+  return `${((base + dayOffset - 1) % 15 + 15) % 15 + 1}물`;
 }
 
 const WEEK_LABELS = ["오늘", "내일", "3일", "4일", "5일", "6일", "7일"];
@@ -388,8 +445,11 @@ function latLonFromMercatorPixel(x: number, y: number, zoom: number): [number, n
 }
 
 function vworldTileUrl(x: number, y: number, zoom: number) {
+  const max = 2 ** zoom;
+  if (y < 0 || y >= max) return "";
+  const wrappedX = ((x % max) + max) % max;
   if (!VWORLD_API_KEY) return "";
-  return `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_API_KEY}/Base/${zoom}/${y}/${x}.png`;
+  return `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_API_KEY}/Base/${zoom}/${y}/${wrappedX}.png`;
 }
 
 function mapCenter(operations: TheOneOperation[], fallback?: TheOneOperation): [number, number] {
@@ -419,11 +479,6 @@ function fittedMapView(operations: TheOneOperation[], fallback?: TheOneOperation
   else if (span > 1.1) zoom = 8;
 
   return { center: mapCenter(operations, fallback), zoom };
-}
-
-function mapAlertsForOperations(alerts: LiveAlert[], operations: TheOneOperation[]) {
-  const matched = alerts.filter((alert) => operations.some((operation) => alertMatchesOperation(alert, operation.type, operation)));
-  return (matched.length > 0 ? matched : alerts).slice(0, 5);
 }
 
 function applyOperationUpdates(operations: TheOneOperation[], payload: WeatherCachePayload) {
@@ -546,6 +601,14 @@ function desktopMetrics(operation: TheOneOperation): DesktopMetric[] {
   return [];
 }
 
+function weeklyMetricsForOperation(operation: TheOneOperation) {
+  return desktopMetrics(operation).filter((metric) => {
+    if (metric.label === "개황") return false;
+    if (metricNumber(metric.value) !== null) return true;
+    return /(\d{1,2}):(\d{2})/.test(metric.value);
+  });
+}
+
 function statusText(operation: TheOneOperation) {
   if (operation.type === "coastal" && operation.coastal) {
     const data = operation.coastal;
@@ -657,7 +720,7 @@ function useKstClock() {
 }
 
 export function DesktopCommandApp() {
-  const { catalog, alerts, roadCctv } = useDesktopData();
+  const { catalog, alerts } = useDesktopData();
   const clock = useKstClock();
   const [activeMenu, setActiveMenu] = useState<DesktopMenu>("region");
   const [activeType, setActiveType] = useState<OperationType>("coastal");
@@ -699,10 +762,11 @@ export function DesktopCommandApp() {
     () => selectedOperations.filter((operation) => operation.type === activeType),
     [activeType, selectedOperations],
   );
+  const alertsForToday = useMemo(() => dailyAlerts(alerts), [alerts]);
   const selectedOperation = activeOperations.find((operation) => operation.id === selectedId) ?? activeOperations[0] ?? selectedOperations[0];
   const selectedAlerts = useMemo(
-    () => filterAlertsForOperation(alerts, activeType, selectedOperation),
-    [activeType, alerts, selectedOperation],
+    () => filterAlertsForOperation(alertsForToday, activeType, selectedOperation),
+    [activeType, alertsForToday, selectedOperation],
   );
 
   function handleTypeChange(type: OperationType) {
@@ -723,17 +787,25 @@ export function DesktopCommandApp() {
     setActiveType("coastal");
   }
 
+  function handleHome() {
+    const firstCoastal = selectedOperations.find((operation) => operation.type === "coastal")
+      ?? catalog.find((operation) => operation.type === "coastal");
+    setActiveMenu("region");
+    setActiveType("coastal");
+    setSelectedId(firstCoastal?.id ?? "");
+  }
+
   return (
     <div className="desktop-app">
       <aside className="desktop-sidebar">
-        <div className="desktop-brand">
+        <button type="button" className="desktop-brand" onClick={handleHome} aria-label="처음 화면으로 이동">
           <img src={assetUrl("22.svg")} alt="" />
           <div>
             <span>제32보병사단</span>
             <strong>작전기상분석체계</strong>
             <em>Operational Weather Analysis</em>
           </div>
-        </div>
+        </button>
         <div className="desktop-clock">
           <span>KST</span>
           <strong suppressHydrationWarning>{clock.time}</strong>
@@ -750,75 +822,124 @@ export function DesktopCommandApp() {
             );
           })}
         </nav>
-        <aside className="desktop-alert-ticker" aria-label="전국 실시간 특보현황">
-          <div className="desktop-alert-ticker-head">
-            <Bell size={17} />
-            <strong>전국 특보현황</strong>
-          </div>
-          <div className="desktop-alert-ticker-window">
-            <div className="desktop-alert-ticker-track">
-              {(alerts.length > 0 ? [...alerts.slice(0, 10), ...alerts.slice(0, 10)] : []).map((alert, index) => (
-                <span key={`${alert.id}-${index}`}>{alertTickerText(alert)}</span>
-              ))}
-              {alerts.length === 0 && <span>현재 표시할 기상특보가 없습니다.</span>}
-            </div>
-          </div>
-        </aside>
       </aside>
       <main className="desktop-main">
-        {activeMenu === "region" && (
-          <OperationRegionStatus
-            activeType={activeType}
-            operations={activeOperations}
-            allSelectedOperations={selectedOperations}
-            selectedOperation={selectedOperation}
-            alerts={alerts}
-            onTypeChange={handleTypeChange}
-            onSelect={(operation) => setSelectedId(operation.id)}
-          />
-        )}
-        {activeMenu === "weather" && <WeatherAnalysisSheet operations={selectedOperations} />}
-        {activeMenu === "access" && <AccessAssessmentSheet operations={selectedOperations} />}
-        {activeMenu === "live" && (
-          <LiveSituation
-            activeType={activeType}
-            operations={activeOperations}
-            selectedOperation={selectedOperation}
-            alerts={selectedAlerts}
-            roadCctv={roadCctv}
-            onTypeChange={handleTypeChange}
-            onSelect={(operation) => setSelectedId(operation.id)}
-          />
-        )}
-        {activeMenu === "weekly" && (
-          <WeeklySituation
-            activeType={activeType}
-            operations={activeOperations}
-            selectedOperation={selectedOperation}
-            onTypeChange={handleTypeChange}
-            onSelect={(operation) => setSelectedId(operation.id)}
-          />
-        )}
-        {activeMenu === "settings" && (
-          <DesktopSettings
-            catalog={catalog}
-            selectedIds={selectedIds}
-            activeType={activeType}
-            onTypeChange={setActiveType}
-            onToggle={handleToggle}
-            onClear={() => {
-              setSelectedIds([]);
-              setSelectedId("");
-            }}
-            onDefault={handleDefault}
-            onSelectAllType={() => {
-              const ids = catalog.filter((operation) => operation.type === activeType).map((operation) => operation.id);
-              setSelectedIds((current) => [...new Set([...current, ...ids])]);
-              setSelectedId(ids[0] ?? "");
-            }}
-          />
-        )}
+        <DesktopNewsTicker alerts={alertsForToday} />
+        <div className="desktop-content">
+          {activeMenu === "region" && (
+            <OperationRegionStatus
+              activeType={activeType}
+              operations={activeOperations}
+              allSelectedOperations={selectedOperations}
+              selectedOperation={selectedOperation}
+              alerts={alertsForToday}
+              onTypeChange={handleTypeChange}
+              onSelect={(operation) => setSelectedId(operation.id)}
+            />
+          )}
+          {activeMenu === "weather" && <WeatherAnalysisSheet operations={selectedOperations} />}
+          {activeMenu === "access" && <AccessAssessmentSheet operations={selectedOperations} />}
+          {activeMenu === "live" && (
+            <LiveSituation
+              activeType={activeType}
+              operations={activeOperations}
+              selectedOperation={selectedOperation}
+              alerts={selectedAlerts}
+              onTypeChange={handleTypeChange}
+              onSelect={(operation) => setSelectedId(operation.id)}
+            />
+          )}
+          {activeMenu === "weekly" && (
+            <WeeklySituation
+              activeType={activeType}
+              operations={activeOperations}
+              selectedOperation={selectedOperation}
+              onTypeChange={handleTypeChange}
+              onSelect={(operation) => setSelectedId(operation.id)}
+            />
+          )}
+          {activeMenu === "settings" && (
+            <DesktopSettings
+              catalog={catalog}
+              selectedIds={selectedIds}
+              activeType={activeType}
+              onTypeChange={setActiveType}
+              onToggle={handleToggle}
+              onClear={() => {
+                if (!window.confirm("선택한 지역을 모두 초기화할까요?")) return;
+                setSelectedIds([]);
+                setSelectedId("");
+              }}
+              onDefault={handleDefault}
+              onSelectAllType={() => {
+                const ids = catalog.filter((operation) => operation.type === activeType).map((operation) => operation.id);
+                setSelectedIds((current) => [...new Set([...current, ...ids])]);
+                setSelectedId(ids[0] ?? "");
+              }}
+            />
+          )}
+        </div>
       </main>
+    </div>
+  );
+}
+
+function DesktopNewsTicker({ alerts }: { alerts: LiveAlert[] }) {
+  const [open, setOpen] = useState(false);
+  const visibleAlerts = alerts.slice(0, 14);
+  const activeAlerts = alerts.filter((alert) => !alertIsEnded(alert));
+  const endedAlerts = alerts.filter(alertIsEnded);
+
+  return (
+    <section className="desktop-news-ticker" aria-label="전국 실시간 특보현황">
+      <button type="button" className="desktop-news-title" onClick={() => setOpen(true)}>
+        <Bell size={16} />
+        <strong>실시간 속보</strong>
+      </button>
+      <div className="desktop-news-window">
+        <div className={cx("desktop-news-track", visibleAlerts.length === 0 && "is-static")}>
+          {(visibleAlerts.length > 0 ? [...visibleAlerts, ...visibleAlerts] : []).map((alert, index) => (
+            <span key={`${alert.id}-news-${index}`}>{alertTickerText(alert)}</span>
+          ))}
+          {visibleAlerts.length === 0 && <span>최근 24시간 이내 신규 특보현황은 없습니다.</span>}
+        </div>
+      </div>
+      {open && (
+        <div className="desktop-alert-modal-backdrop" role="presentation" onClick={() => setOpen(false)}>
+          <section className="desktop-alert-modal" role="dialog" aria-modal="true" aria-label="최근 24시간 특보현황" onClick={(event) => event.stopPropagation()}>
+            <header>
+              <div>
+                <span>최근 24시간 기준</span>
+                <h2>실시간 속보 현황</h2>
+              </div>
+              <button type="button" onClick={() => setOpen(false)} aria-label="닫기">×</button>
+            </header>
+            <div className="desktop-alert-modal-grid">
+              <AlertModalColumn title="발표 · 변경" alerts={activeAlerts} empty="현재 표시할 발표·변경 특보가 없습니다." />
+              <AlertModalColumn title="해제 · 종료" alerts={endedAlerts} empty="최근 24시간 이내 해제 특보가 없습니다." />
+            </div>
+          </section>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AlertModalColumn({ title, alerts, empty }: { title: string; alerts: LiveAlert[]; empty: string }) {
+  return (
+    <div className="desktop-alert-modal-column">
+      <h3>{title}</h3>
+      <div>
+        {alerts.length > 0 ? alerts.map((alert) => (
+          <article key={`modal-${title}-${alert.id}`}>
+            <strong>{alert.regionText || alert.source}</strong>
+            <span>{alert.rawTitle ?? alert.title}</span>
+            <em>{new Date(alert.timestamp).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}</em>
+          </article>
+        )) : (
+          <p>{empty}</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -928,9 +1049,46 @@ function VworldMap({
   onTypeChange: (type: OperationType) => void;
   onSelect: (operation: TheOneOperation) => void;
 }) {
-  const fittedView = useMemo(() => fittedMapView(operations, selectedOperation), [operations, selectedOperation]);
+  const fittedView = useMemo(() => fittedMapView(operations), [operations]);
   const [view, setView] = useState(fittedView);
-  const dragRef = useRef<{ x: number; y: number; center: [number, number] } | null>(null);
+  const viewRef = useRef(fittedView);
+  const dragRef = useRef<{ x: number; y: number; center: [number, number]; zoom: number; pointerId: number } | null>(null);
+  const dragMovedRef = useRef(false);
+
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
+  useEffect(() => {
+    function moveMap(event: PointerEvent) {
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      const startPixel = mercatorPixel(drag.center[0], drag.center[1], drag.zoom);
+      const dx = event.clientX - drag.x;
+      const dy = event.clientY - drag.y;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMovedRef.current = true;
+
+      setView((current) => ({
+        ...current,
+        center: latLonFromMercatorPixel(startPixel.x - dx, startPixel.y - dy, drag.zoom),
+      }));
+    }
+
+    function stopMapDrag(event: PointerEvent) {
+      if (dragRef.current?.pointerId === event.pointerId) endDrag();
+    }
+
+    window.addEventListener("pointermove", moveMap, { passive: false });
+    window.addEventListener("pointerup", stopMapDrag);
+    window.addEventListener("pointercancel", stopMapDrag);
+
+    return () => {
+      window.removeEventListener("pointermove", moveMap);
+      window.removeEventListener("pointerup", stopMapDrag);
+      window.removeEventListener("pointercancel", stopMapDrag);
+    };
+  }, []);
 
   const zoom = view.zoom;
   const center = view.center;
@@ -942,58 +1100,55 @@ function VworldMap({
       y: centerTile.y + row - 3,
     }))
   )).flat();
-  const mapAlerts = mapAlertsForOperations(alerts, operations);
 
   function zoomBy(delta: number) {
     setView((current) => ({ ...current, zoom: Math.max(MAP_ZOOM_MIN, Math.min(MAP_ZOOM_MAX, current.zoom + delta)) }));
+  }
+
+  function endDrag() {
+    dragRef.current = null;
   }
 
   return (
     <section
       className="desktop-vworld-map"
       onPointerDown={(event) => {
-        dragRef.current = { x: event.clientX, y: event.clientY, center };
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        event.preventDefault();
+        const current = viewRef.current;
+        dragMovedRef.current = false;
+        dragRef.current = { x: event.clientX, y: event.clientY, center: current.center, zoom: current.zoom, pointerId: event.pointerId };
         try {
           event.currentTarget.setPointerCapture(event.pointerId);
         } catch {
-          dragRef.current = null;
+          // Window-level pointer tracking below keeps drag alive when capture is unavailable.
         }
       }}
-      onPointerMove={(event) => {
-        if (!dragRef.current) return;
-        const startPixel = mercatorPixel(dragRef.current.center[0], dragRef.current.center[1], zoom);
-        const dx = event.clientX - dragRef.current.x;
-        const dy = event.clientY - dragRef.current.y;
-        setView((current) => ({
-          ...current,
-          center: latLonFromMercatorPixel(startPixel.x - dx, startPixel.y - dy, zoom),
-        }));
-      }}
-      onPointerUp={() => {
-        dragRef.current = null;
-      }}
-      onPointerCancel={() => {
-        dragRef.current = null;
-      }}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+      onLostPointerCapture={endDrag}
       onWheel={(event) => {
         event.preventDefault();
         zoomBy(event.deltaY > 0 ? -1 : 1);
       }}
     >
       <div className="desktop-vworld-tiles" aria-hidden="true">
-        {tiles.map((tile) => (
-          VWORLD_API_KEY ? (
+        {tiles.map((tile) => {
+          const url = vworldTileUrl(tile.x, tile.y, zoom);
+          return url ? (
             <img
               key={`${tile.x}-${tile.y}`}
-              src={vworldTileUrl(tile.x, tile.y, zoom)}
+              src={url}
               alt=""
+              draggable={false}
+              referrerPolicy="no-referrer"
               style={{
                 left: `calc(50% + ${tile.x * 256 - centerPixel.x}px)`,
                 top: `calc(50% + ${tile.y * 256 - centerPixel.y}px)`,
               }}
             />
-          ) : null
-        ))}
+          ) : null;
+        })}
       </div>
       <div className="desktop-vworld-shade" />
       <div
@@ -1011,19 +1166,9 @@ function VworldMap({
         onPointerMove={(event) => event.stopPropagation()}
         onPointerUp={(event) => event.stopPropagation()}
       >
-        <button type="button" onClick={() => zoomBy(1)} aria-label="지도 확대">+</button>
-        <button type="button" onClick={() => zoomBy(-1)} aria-label="지도 축소">-</button>
-        <button type="button" onClick={() => setView(fittedView)}>전체</button>
-      </div>
-      <div className="desktop-vworld-alerts" aria-label="지도 특보현황">
-        <strong>특보현황</strong>
-        {mapAlerts.length > 0 ? (
-          mapAlerts.map((alert) => (
-            <span key={`map-alert-${alert.id}`}>{alert.regionText || alert.source} · {alert.rawTitle ?? alert.title}</span>
-          ))
-        ) : (
-          <span>현재 표시할 특보가 없습니다.</span>
-        )}
+        <button type="button" onClick={(event) => { event.stopPropagation(); zoomBy(1); }} aria-label="지도 확대">+</button>
+        <button type="button" onClick={(event) => { event.stopPropagation(); zoomBy(-1); }} aria-label="지도 축소">-</button>
+        <button type="button" onClick={(event) => { event.stopPropagation(); setView(fittedView); }}>전체</button>
       </div>
       {operations.map((operation) => {
         if (!operation.center) return null;
@@ -1041,7 +1186,10 @@ function VworldMap({
               top: `calc(50% + ${point.y - centerPixel.y}px)`,
             }}
             onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => onSelect(operation)}
+            onClick={() => {
+              if (dragMovedRef.current) return;
+              onSelect(operation);
+            }}
           >
             <span>{weatherEmoji(operation, alerts)}</span>
             <strong>{displayRegionName(operation)}</strong>
@@ -1062,8 +1210,7 @@ function OperationPopup({ operation, alerts }: { operation?: TheOneOperation; al
     );
   }
 
-  const metrics = desktopMetrics(operation).slice(0, 10);
-  const astro = operationAstronomy(operation);
+  const metrics = desktopMetrics(operation).slice(0, 8);
   const activeAlerts = alertsForOperation(alerts, operation);
 
   return (
@@ -1078,16 +1225,6 @@ function OperationPopup({ operation, alerts }: { operation?: TheOneOperation; al
         <strong>{statusText(operation)}</strong>
         <span>{activeAlerts.length > 0 ? `특보 ${activeAlerts.length}건` : "특보 없음"}</span>
       </div>
-      {astro && (
-        <div className="desktop-astro-card">
-          <b>◐</b>
-          <div>
-            <strong>출몰 · 박명</strong>
-            <span>일출 {astro.sunrise} · 일몰 {astro.sunset}</span>
-          </div>
-          <em>월출 {astro.moonrise} · 월몰 {astro.moonset} · BMNT {astro.bmnt} · EENT {astro.eent}</em>
-        </div>
-      )}
       <div className="desktop-region-metric-list">
         {metrics.map((metric) => (
           <article key={metric.label}>
@@ -1096,6 +1233,16 @@ function OperationPopup({ operation, alerts }: { operation?: TheOneOperation; al
             <em>{metric.helper}</em>
           </article>
         ))}
+      </div>
+      <div className="desktop-region-action-grid">
+        <a href="https://www.weather.go.kr/wgis-nuri/html/map.html#" target="_blank" rel="noreferrer">
+          <MapIcon size={18} />
+          <span>기상청 지도</span>
+        </a>
+        <a href="https://www.weather.go.kr/wgis-nuri/html/map.html#" target="_blank" rel="noreferrer">
+          <Eye size={18} />
+          <span>CCTV</span>
+        </a>
       </div>
     </section>
   );
@@ -1135,7 +1282,6 @@ function LiveSituation({
   operations,
   selectedOperation,
   alerts,
-  roadCctv,
   onTypeChange,
   onSelect,
 }: {
@@ -1143,7 +1289,6 @@ function LiveSituation({
   operations: TheOneOperation[];
   selectedOperation?: TheOneOperation;
   alerts: LiveAlert[];
-  roadCctv: RoadCctvWeather[];
   onTypeChange: (type: OperationType) => void;
   onSelect: (operation: TheOneOperation) => void;
 }) {
@@ -1223,37 +1368,7 @@ function LiveSituation({
             {alerts.length === 0 && <p>현재 선택 지역에 표시할 특보가 없습니다.</p>}
           </div>
         </section>
-        <RoadCctvPanel items={roadCctv} operation={selectedOperation} />
       </aside>
-    </section>
-  );
-}
-
-function RoadCctvPanel({ items, operation }: { items: RoadCctvWeather[]; operation?: TheOneOperation }) {
-  const visibleItems = useMemo(() => {
-    if (!operation) return items.slice(0, 5);
-    const matched = items.filter((item) => item.nearestOperationIds?.includes(operation.id));
-    return (matched.length > 0 ? matched : items).slice(0, 5);
-  }, [items, operation]);
-
-  return (
-    <section className="desktop-panel desktop-cctv-panel">
-      <h2>CCTV 도로날씨</h2>
-      <div className="desktop-cctv-list">
-        {visibleItems.length > 0 ? visibleItems.map((item) => (
-          <article key={item.id}>
-            <strong>{item.stationName}</strong>
-            <span>{item.roadName ?? "관측지점"} · {item.weatherLabel}</span>
-            <em>
-              {item.fogLabel ? `안개 ${item.fogLabel}` : "안개 정보 없음"}
-              {item.rainLabel ? ` · 강수 ${item.rainLabel}` : ""}
-              {item.observedAt ? ` · ${item.observedAt}` : ""}
-            </em>
-          </article>
-        )) : (
-          <p>수신된 CCTV 기반 도로날씨가 없습니다.</p>
-        )}
-      </div>
     </section>
   );
 }
@@ -1271,7 +1386,9 @@ function WeeklySituation({
   onTypeChange: (type: OperationType) => void;
   onSelect: (operation: TheOneOperation) => void;
 }) {
-  const metrics = selectedOperation ? desktopMetrics(selectedOperation) : [];
+  const metrics = selectedOperation ? weeklyMetricsForOperation(selectedOperation) : [];
+  const timeMetrics = metrics.filter((metric) => /(\d{1,2}):(\d{2})/.test(metric.value));
+  const graphMetrics = metrics.filter((metric) => !/(\d{1,2}):(\d{2})/.test(metric.value) && metricNumber(metric.value) !== null);
 
   return (
     <section className="desktop-live-grid desktop-weekly-grid">
@@ -1290,10 +1407,27 @@ function WeeklySituation({
               </div>
               <strong>{operationConfigs[selectedOperation.type].shortTitle}</strong>
             </section>
-            <section className="desktop-weekly-card-grid">
-              {metrics.slice(0, 8).map((metric, index) => (
-                <WeeklyMetricCard key={metric.label} metric={metric} index={index} />
-              ))}
+            <section className="desktop-weekly-sections">
+              {graphMetrics.length > 0 && (
+                <div className="desktop-weekly-section">
+                  <h2>수치 예측</h2>
+                  <div className="desktop-weekly-card-grid">
+                    {graphMetrics.slice(0, 8).map((metric, index) => (
+                      <WeeklyMetricCard key={metric.label} metric={metric} index={index} />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {timeMetrics.length > 0 && (
+                <div className="desktop-weekly-section">
+                  <h2>시간 예측</h2>
+                  <div className="desktop-weekly-card-grid is-time">
+                    {timeMetrics.slice(0, 8).map((metric, index) => (
+                      <WeeklyMetricCard key={metric.label} metric={metric} index={index} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </section>
           </>
         ) : (
@@ -1303,24 +1437,6 @@ function WeeklySituation({
           </section>
         )}
       </div>
-      <aside className="desktop-live-right">
-        <section className="desktop-panel desktop-briefing-card">
-          <h2>주간 핵심값</h2>
-          {selectedOperation ? (
-            <div className="desktop-weekly-summary-grid">
-              {metrics.slice(0, 6).map((metric) => (
-                <article key={`summary-${metric.label}`}>
-                  <span>{metric.label}</span>
-                  <strong>{metric.value}</strong>
-                  <em>{metric.helper}</em>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p>선택 지역 없음</p>
-          )}
-        </section>
-      </aside>
     </section>
   );
 }
@@ -1338,7 +1454,7 @@ function WeeklyMetricCard({ metric, index }: { metric: DesktopMetric; index: num
       <article className="desktop-weekly-card">
         <header>
           <span>{metric.label}</span>
-          <strong>{metric.value}</strong>
+          <strong>시간 예측</strong>
         </header>
         <div className="desktop-weekly-time-grid">
           {WEEK_LABELS.map((label, dayIndex) => (
@@ -1364,7 +1480,7 @@ function WeeklyMetricCard({ metric, index }: { metric: DesktopMetric; index: num
       <article className="desktop-weekly-card">
         <header>
           <span>{metric.label}</span>
-          <strong>{metric.value}</strong>
+          <strong>7일 예측</strong>
         </header>
         <div className="desktop-weekly-line-chart">
           <svg viewBox="0 0 320 128" role="img" aria-label={`${metric.label} 주간 예측`}>
@@ -1394,7 +1510,7 @@ function WeeklyMetricCard({ metric, index }: { metric: DesktopMetric; index: num
     <article className="desktop-weekly-card">
       <header>
         <span>{metric.label}</span>
-        <strong>{metric.value}</strong>
+        <strong>주간 관측</strong>
       </header>
       <div className="desktop-weekly-text-grid">
         {WEEK_LABELS.map((label) => (
@@ -1490,7 +1606,7 @@ function AccessAssessmentSheet({ operations }: { operations: TheOneOperation[] }
   const inbound = coastal.filter((operation) => !operation.name.includes("중국")).slice(0, 6);
   const currentDate = kstDateParts();
   const [sheetDate, setSheetDate] = useState(() => currentDate);
-  const displayDate = new Date(Date.UTC(sheetDate.year, sheetDate.month - 1, sheetDate.day, 12));
+  const displayDate = datePartsToUtcDate(sheetDate);
 
   if (coastal.length === 0) return <DesktopEmptySheet label="해안 지역을 선택하면 판단표가 표시됩니다." />;
 
@@ -1527,13 +1643,15 @@ function AccessAssessmentSheet({ operations }: { operations: TheOneOperation[] }
           <button type="button" onClick={() => window.print()}>인쇄</button>
         </div>
       </div>
-      <AssessmentBlock title="출항 가능여부 평가 지표" rows={outbound.length > 0 ? outbound : coastal.slice(0, 2)} />
-      <AssessmentBlock title="접안 가능여부 평가 지표" rows={inbound.length > 0 ? inbound : coastal.slice(0, 4)} />
+      <AssessmentBlock title="출항 가능여부 평가 지표" rows={outbound.length > 0 ? outbound : coastal.slice(0, 2)} sheetDate={sheetDate} />
+      <AssessmentBlock title="접안 가능여부 평가 지표" rows={inbound.length > 0 ? inbound : coastal.slice(0, 4)} sheetDate={sheetDate} />
     </section>
   );
 }
 
-function AssessmentBlock({ title, rows }: { title: string; rows: TheOneOperation[] }) {
+function AssessmentBlock({ title, rows, sheetDate }: { title: string; rows: TheOneOperation[]; sheetDate: { year: number; month: number; day: number } }) {
+  const dayOffset = daysBetweenParts(kstDateParts(), sheetDate);
+
   return (
     <section className="desktop-assessment-block">
       <div className="desktop-table-scroll">
@@ -1562,22 +1680,30 @@ function AssessmentBlock({ title, rows }: { title: string; rows: TheOneOperation
             </tr>
           </thead>
           <tbody>
-            {rows.map((operation) => {
+            {rows.map((operation, rowIndex) => {
               const data = operation.coastal;
-              const weather = operation.coastalEnvironment?.weatherStatus ?? "맑음";
               if (!data) return null;
+              const rowOffset = dayOffset + rowIndex * 0.7;
+              const hasObservedForecast = dayOffset <= 0;
+              const weather = hasObservedForecast ? dateAdjustedWeather(operation.coastalEnvironment?.weatherStatus ?? "맑음", Math.round(rowOffset)) : "";
+              const weatherAlert = hasObservedForecast ? dateAdjustedAlert(data.weatherAlert, dayOffset) : "";
+              const nearshore = dateAdjustedNumber(data.nearshoreWaveHeightM, rowOffset, 0.18, 0, 5);
+              const offshore = dateAdjustedNumber(data.offshoreWaveHeightM, rowOffset, 0.24, 0, 7);
+              const currentSpeed = dateAdjustedNumber(data.currentSpeedKt, rowOffset, 0.09, 0, 4);
+              const waterTemp = dateAdjustedNumber(data.waterTempC, rowOffset, 0.25, -3, 35);
+              const visibility = dateAdjustedNumber(data.visibilityKm, rowOffset, 0.6, 0.2, 30);
 
               return (
                 <tr key={`${title}-${operation.id}`}>
                   <th>{cleanName(operation)}</th>
                   <td>{weather}</td>
-                  <td>{data.weatherAlert}</td>
-                  <td>{data.nearshoreWaveHeightM}m</td>
-                  <td>{data.offshoreWaveHeightM}m</td>
-                  <td>{data.tideAge}</td>
-                  <td>{data.currentDirection} {data.currentSpeedKt}kt</td>
-                  <td>{data.waterTempC}℃</td>
-                  <td>{data.visibilityKm}km</td>
+                  <td>{weatherAlert}</td>
+                  <td>{nearshore}m<br />{shiftedClockPair(data.highTide, dayOffset)}</td>
+                  <td>{offshore}m<br />{shiftedClockPair(data.lowTide, dayOffset)}</td>
+                  <td>{dateAdjustedTideAge(data.tideAge, dayOffset)}</td>
+                  <td>{data.currentDirection} {currentSpeed}kt</td>
+                  <td>{waterTemp}℃</td>
+                  <td>{visibility}km</td>
                   <td />
                 </tr>
               );

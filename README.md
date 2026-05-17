@@ -52,12 +52,21 @@
 현재 직접 호출하도록 준비된 API는 다음과 같습니다.
 
 - 기상청 단기예보 조회서비스 초단기실황/초단기예보: 기온, 강수량, 습도, 풍향, 풍속, 날씨 상태
+- 기상청 ASOS 시간자료: 시정, 기온, 습도, 풍향, 풍속, 강수량 보강
 - 한국환경공단 에어코리아 측정소별 실시간 측정정보: PM10, PM2.5 등급
 - 한국천문연구원 출몰시각: 일출, 일몰, 월출, 월몰, BMNT, EENT 후보
 - 국립해양조사원 조석예보: 관측소 코드가 설정된 항구의 만조, 간조
+- 국립해양조사원 조류예보 시계열: 유향, 유속
+- 국립해양조사원 조위관측소 최신 관측데이터/실측 수온: 수온, 조위관측 기반 해양 보강값
 
 추가 연동 대기 API는 다음 Secrets 이름으로 분리해 둡니다. 키 값은 GitHub 저장소에 커밋하지 않고, GitHub Actions Secrets 또는 내부망 변환 서버 환경변수로만 관리합니다.
 
+- `KMA_ASOS_SERVICE_KEY`: 기상청 지상(종관, ASOS) 시간자료 조회서비스
+- `KHOA_CURRENT_SERVICE_KEY`: 국립해양조사원 조류예보 시계열
+- `KHOA_TIDE_RECENT_SERVICE_KEY`: 국립해양조사원 조위관측소 최신 관측데이터
+- `KHOA_WATER_TEMP_SERVICE_KEY`: 국립해양조사원 조위관측소 실측 수온 조회
+- `KMA_WIND_PROFILER_SERVICE_KEY`: 기상청 연직바람관측 APIHub
+- `KMA_AVIATION_SERVICE_KEY`: 기상청 항공기상전문 조회서비스
 - `KMA_ROAD_WEATHER_SERVICE_KEY`: CCTV 기반 도로날씨정보 조회서비스
 - `KMA_RADAR_SERVICE_KEY`: 기상청 레이더영상 조회서비스
 - `KMA_LIFE_INDEX_SERVICE_KEY`: 기상청 생활기상지수 조회서비스
@@ -69,7 +78,7 @@
 - `KMA_UPPER_AIR_SERVICE_KEY`: 기상청 고층기상 자료
 - `KMA_BEACH_WEATHER_SERVICE_KEY`: 전국 해수욕장 날씨 조회서비스
 
-해양 파고/수온은 현재 기상청 초단기 풍속·강수 기반 추정값으로 캐시에 반영하며, 기상청 해양관측 또는 해양부이 API 키와 지점코드가 확보되면 동일한 캐시 구조에 실측값으로 교체할 수 있습니다.
+해양 파고와 파주기는 기상청 해양기상관측자료 권한 확보 전까지 기상청 초단기 풍속·강수 기반 추정값으로 유지합니다. 국립해양조사원 조류·조위·실측 수온 키가 설정되면 조류속도, 조류방향, 수온은 공식값으로 대체됩니다.
 
 ## 정적 운용 원칙
 
@@ -124,7 +133,7 @@ NEXT_PUBLIC_BASE_PATH=/Maritime-Intrusion-Assessment-Dashboard npm run build
 3. 정적 사이트 빌드
 4. GitHub Pages 배포
 
-Actions Secrets에 `PUBLIC_DATA_SERVICE_KEY`, `KMA_SERVICE_KEY`, `KHOA_SERVICE_KEY`, `KASI_SERVICE_KEY`, `AIRKOREA_SERVICE_KEY`, `KHOA_TIDE_OBS_CODE_SEOSAN`, `KHOA_TIDE_OBS_CODE_DANGJIN`, `KHOA_TIDE_OBS_CODE_TAEAN`, `KHOA_TIDE_OBS_CODE_BORYEONG` 등을 넣으면 실제 캐시 갱신에 사용됩니다. 추가 API는 위 `KMA_*_SERVICE_KEY` 이름으로 넣습니다. `WEATHER_CACHE_SOURCE_URL`을 넣으면 내부 변환 서버가 만든 JSON을 우선 사용합니다.
+Actions Secrets에 `PUBLIC_DATA_SERVICE_KEY`, `KMA_SERVICE_KEY`, `KMA_ASOS_SERVICE_KEY`, `KHOA_SERVICE_KEY`, `KHOA_CURRENT_SERVICE_KEY`, `KHOA_TIDE_RECENT_SERVICE_KEY`, `KHOA_WATER_TEMP_SERVICE_KEY`, `KASI_SERVICE_KEY`, `AIRKOREA_SERVICE_KEY`, `KHOA_TIDE_OBS_CODE_SEOSAN`, `KHOA_TIDE_OBS_CODE_DANGJIN`, `KHOA_TIDE_OBS_CODE_TAEAN`, `KHOA_TIDE_OBS_CODE_BORYEONG` 등을 넣으면 실제 캐시 갱신에 사용됩니다. 조류·수온 지점 코드가 조석 코드와 다르면 `KHOA_CURRENT_OBS_CODE_*`, `KHOA_TEMP_OBS_CODE_*`를 별도로 넣습니다. 추가 API는 위 `KMA_*_SERVICE_KEY` 이름으로 넣습니다. `WEATHER_CACHE_SOURCE_URL`을 넣으면 내부 변환 서버가 만든 JSON을 우선 사용합니다.
 
 ## 보안 주의
 
