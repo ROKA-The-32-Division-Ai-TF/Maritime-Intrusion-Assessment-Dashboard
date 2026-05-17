@@ -90,6 +90,15 @@ const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
 const TYPES: OperationType[] = ["coastal", "ground", "air"];
 const MAP_ZOOM_MIN = 4;
 const MAP_ZOOM_MAX = 11;
+const KMA_WEATHER_MAP_URL = "https://www.weather.go.kr/wgis-nuri/html/map.html#";
+const KMA_MAP_SERVICES = [
+  { label: "초단기강수예측", href: KMA_WEATHER_MAP_URL },
+  { label: "특보", href: KMA_WEATHER_MAP_URL },
+  { label: "어제", href: KMA_WEATHER_MAP_URL },
+  { label: "1시간관측", href: KMA_WEATHER_MAP_URL },
+  { label: "현재날씨", href: KMA_WEATHER_MAP_URL },
+  { label: "예보", href: KMA_WEATHER_MAP_URL },
+];
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -1009,6 +1018,31 @@ function DesktopTypeSwitch({ activeType, onTypeChange }: { activeType: Operation
   );
 }
 
+function KmaMapServiceStrip() {
+  return (
+    <div className="desktop-kma-service-strip" aria-label="기상청 지도 서비스">
+      <div className="desktop-kma-service-actions">
+        {KMA_MAP_SERVICES.map((service, index) => (
+          <a
+            key={service.label}
+            href={service.href}
+            target="_blank"
+            rel="noreferrer"
+            className={index === 0 ? "is-primary" : ""}
+            title={`${service.label} 원본 지도 열기`}
+          >
+            {service.label}
+          </a>
+        ))}
+      </div>
+      <a className="desktop-kma-source-link" href={KMA_WEATHER_MAP_URL} target="_blank" rel="noreferrer" title="기상청 지도 원본 열기">
+        원본
+        <ExternalLink size={12} />
+      </a>
+    </div>
+  );
+}
+
 function OperationRail({
   operations,
   selectedId,
@@ -1211,6 +1245,7 @@ function VworldMap({
         onPointerUp={(event) => event.stopPropagation()}
       >
         <DesktopTypeSwitch activeType={activeType} onTypeChange={onTypeChange} />
+        <KmaMapServiceStrip />
       </div>
       {operations.map((operation) => {
         if (!operation.center) return null;

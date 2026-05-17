@@ -3165,7 +3165,9 @@ body:has(.desktop-app) {
   left: 16px;
   top: 16px;
   z-index: 9;
-  width: min(430px, calc(100% - 150px));
+  display: grid;
+  gap: 9px;
+  width: min(690px, calc(100% - 150px));
 }
 
 .desktop-map-type-switch .desktop-type-switch {
@@ -3182,6 +3184,68 @@ body:has(.desktop-app) {
 .desktop-map-type-switch .desktop-type-switch button.is-active {
   background: rgba(255, 255, 255, 0.94);
   color: var(--desktop-blue);
+}
+
+.desktop-kma-service-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.44);
+  border-radius: 16px;
+  background: rgba(7, 18, 42, 0.58);
+  box-shadow: 0 14px 34px rgba(3, 14, 34, 0.18);
+  backdrop-filter: blur(14px);
+}
+
+.desktop-kma-service-actions {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.desktop-kma-service-actions::-webkit-scrollbar {
+  display: none;
+}
+
+.desktop-kma-service-actions a,
+.desktop-kma-source-link {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.desktop-kma-service-actions a {
+  flex: 0 0 auto;
+  padding: 0 15px;
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.desktop-kma-service-actions a.is-primary {
+  background: linear-gradient(135deg, #14b8ff, #0576d9);
+  color: white;
+  box-shadow: 0 12px 24px rgba(0, 128, 220, 0.28);
+}
+
+.desktop-kma-service-actions a:hover,
+.desktop-kma-source-link:hover {
+  transform: translateY(-1px);
+}
+
+.desktop-kma-source-link {
+  gap: 5px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .desktop-map-marker {
@@ -4374,7 +4438,7 @@ body:has(.desktop-app) {
   }
 
   .desktop-map-type-switch {
-    width: min(360px, calc(100% - 120px));
+    width: min(560px, calc(100% - 120px));
   }
 
   .desktop-settings-toolbar {
@@ -4516,6 +4580,20 @@ body:has(.desktop-app) {
   .desktop-weekly-text-grid,
   .desktop-weekly-value-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .desktop-map-type-switch {
+    left: 12px;
+    top: 12px;
+    width: calc(100% - 24px);
+  }
+
+  .desktop-kma-service-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .desktop-kma-source-link {
+    display: none;
   }
 }
 
