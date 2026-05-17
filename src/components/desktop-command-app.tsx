@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent } from "react";
 import {
   Activity,
   Bell,
@@ -14,8 +14,10 @@ import {
   Copyright,
   Database,
   Eye,
+  KeyRound,
   ListChecks,
   LineChart,
+  LockKeyhole,
   Map as MapIcon,
   Moon,
   ExternalLink,
@@ -75,13 +77,14 @@ const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const VWORLD_API_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY ?? "";
 const DESKTOP_SELECTION_KEY = "baekryong-desktop-selection-v1";
 const DESKTOP_TYPE_KEY = "baekryong-desktop-type-v1";
+const DESKTOP_ADMIN_PIN_KEY = "baekryong-desktop-admin-pin-v1";
 const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
   { id: "region", label: "작전지역 기상", icon: MapIcon },
   { id: "weather", label: "기상분석표", icon: CalendarDays },
   { id: "access", label: "밀입국 가능성", icon: ListChecks },
   { id: "live", label: "실시간 상황", icon: MapIcon },
   { id: "weekly", label: "주간 상황", icon: LineChart },
-  { id: "settings", label: "사용자 설정", icon: Settings },
+  { id: "settings", label: "관리자 설정", icon: Settings },
 ];
 const TYPES: OperationType[] = ["coastal", "ground", "air"];
 const MAP_ZOOM_MIN = 4;
@@ -726,6 +729,8 @@ export function DesktopCommandApp() {
   const [activeType, setActiveType] = useState<OperationType>("coastal");
   const [selectedIds, setSelectedIds] = useState<string[]>(defaultOperations.map((operation) => operation.id));
   const [selectedId, setSelectedId] = useState(defaultOperations[0]?.id ?? "");
+  const [adminPin, setAdminPin] = useState("0000");
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -733,6 +738,7 @@ export function DesktopCommandApp() {
       try {
         const storedIds = JSON.parse(window.localStorage.getItem(DESKTOP_SELECTION_KEY) ?? "null") as string[] | null;
         const storedType = window.localStorage.getItem(DESKTOP_TYPE_KEY) as OperationType | null;
+        const storedPin = window.localStorage.getItem(DESKTOP_ADMIN_PIN_KEY);
 
         if (Array.isArray(storedIds)) {
           setSelectedIds(storedIds);
@@ -740,6 +746,7 @@ export function DesktopCommandApp() {
         }
 
         if (storedType && TYPES.includes(storedType)) setActiveType(storedType);
+        if (storedPin && /^\d{4}$/.test(storedPin)) setAdminPin(storedPin);
       } catch {
         window.localStorage.removeItem(DESKTOP_SELECTION_KEY);
       } finally {
@@ -793,6 +800,11 @@ export function DesktopCommandApp() {
     setActiveMenu("region");
     setActiveType("coastal");
     setSelectedId(firstCoastal?.id ?? "");
+  }
+
+  function handleAdminPinChange(nextPin: string) {
+    setAdminPin(nextPin);
+    window.localStorage.setItem(DESKTOP_ADMIN_PIN_KEY, nextPin);
   }
 
   return (
@@ -859,24 +871,31 @@ export function DesktopCommandApp() {
             />
           )}
           {activeMenu === "settings" && (
-            <DesktopSettings
-              catalog={catalog}
-              selectedIds={selectedIds}
-              activeType={activeType}
-              onTypeChange={setActiveType}
-              onToggle={handleToggle}
-              onClear={() => {
-                if (!window.confirm("선택한 지역을 모두 초기화할까요?")) return;
-                setSelectedIds([]);
-                setSelectedId("");
-              }}
-              onDefault={handleDefault}
-              onSelectAllType={() => {
-                const ids = catalog.filter((operation) => operation.type === activeType).map((operation) => operation.id);
-                setSelectedIds((current) => [...new Set([...current, ...ids])]);
-                setSelectedId(ids[0] ?? "");
-              }}
-            />
+            adminUnlocked ? (
+              <DesktopSettings
+                catalog={catalog}
+                selectedIds={selectedIds}
+                activeType={activeType}
+                adminPin={adminPin}
+                onTypeChange={setActiveType}
+                onToggle={handleToggle}
+                onClear={() => {
+                  if (!window.confirm("선택한 지역을 모두 초기화할까요?")) return;
+                  setSelectedIds([]);
+                  setSelectedId("");
+                }}
+                onDefault={handleDefault}
+                onSelectAllType={() => {
+                  const ids = catalog.filter((operation) => operation.type === activeType).map((operation) => operation.id);
+                  setSelectedIds((current) => [...new Set([...current, ...ids])]);
+                  setSelectedId(ids[0] ?? "");
+                }}
+                onChangePin={handleAdminPinChange}
+                onLock={() => setAdminUnlocked(false)}
+              />
+            ) : (
+              <DesktopAdminPinGate adminPin={adminPin} onUnlock={() => setAdminUnlocked(true)} />
+            )
           )}
         </div>
       </main>
@@ -1205,7 +1224,7 @@ function OperationPopup({ operation, alerts }: { operation?: TheOneOperation; al
     return (
       <section className="desktop-panel desktop-region-popup">
         <h2>지역 정보</h2>
-        <p>사용자 설정에서 작전지역을 선택하세요.</p>
+        <p>관리자 설정에서 작전지역을 선택하세요.</p>
       </section>
     );
   }
@@ -1338,7 +1357,7 @@ function LiveSituation({
         ) : (
           <section className="desktop-empty is-large">
             <Database size={30} />
-            <strong>사용자 설정에서 지역을 선택하세요</strong>
+            <strong>관리자 설정에서 지역을 선택하세요</strong>
           </section>
         )}
       </div>
@@ -1433,7 +1452,7 @@ function WeeklySituation({
         ) : (
           <section className="desktop-empty is-large">
             <Database size={30} />
-            <strong>사용자 설정에서 지역을 선택하세요</strong>
+            <strong>관리자 설정에서 지역을 선택하세요</strong>
           </section>
         )}
       </div>
@@ -1724,24 +1743,159 @@ function DesktopEmptySheet({ label }: { label: string }) {
   );
 }
 
+function DesktopAdminPinGate({ adminPin, onUnlock }: { adminPin: string; onUnlock: () => void }) {
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pin === adminPin) {
+      setError("");
+      setPin("");
+      onUnlock();
+      return;
+    }
+
+    setError("PIN 번호가 일치하지 않습니다.");
+  }
+
+  return (
+    <section className="desktop-admin-gate">
+      <div className="desktop-admin-lock-card">
+        <span className="desktop-admin-lock-icon">
+          <LockKeyhole size={34} />
+        </span>
+        <div>
+          <em>관리자 인증</em>
+          <h2>관리자 설정</h2>
+          <p>작전지역 선택과 시스템 설정 변경은 관리자 PIN 확인 후 가능합니다.</p>
+        </div>
+        <form onSubmit={handleSubmit} className="desktop-admin-pin-form">
+          <label htmlFor="desktop-admin-pin">PIN 번호</label>
+          <input
+            id="desktop-admin-pin"
+            type="password"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={4}
+            value={pin}
+            onChange={(event) => {
+              setPin(event.target.value.replace(/\D/g, "").slice(0, 4));
+              setError("");
+            }}
+            placeholder="0000"
+            autoFocus
+          />
+          {error && <strong role="alert">{error}</strong>}
+          <button type="submit" disabled={pin.length !== 4}>관리자 설정 열기</button>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+function AdminPinPanel({
+  adminPin,
+  onChangePin,
+  onLock,
+}: {
+  adminPin: string;
+  onChangePin: (pin: string) => void;
+  onLock: () => void;
+}) {
+  const [currentPin, setCurrentPin] = useState("");
+  const [nextPin, setNextPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [message, setMessage] = useState("");
+  const [isError, setIsError] = useState(false);
+
+  function cleanPin(value: string) {
+    return value.replace(/\D/g, "").slice(0, 4);
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (currentPin !== adminPin) {
+      setIsError(true);
+      setMessage("현재 PIN 번호가 일치하지 않습니다.");
+      return;
+    }
+
+    if (!/^\d{4}$/.test(nextPin)) {
+      setIsError(true);
+      setMessage("새 PIN 번호는 숫자 4자리로 입력하세요.");
+      return;
+    }
+
+    if (nextPin !== confirmPin) {
+      setIsError(true);
+      setMessage("새 PIN 번호 확인이 일치하지 않습니다.");
+      return;
+    }
+
+    onChangePin(nextPin);
+    setCurrentPin("");
+    setNextPin("");
+    setConfirmPin("");
+    setIsError(false);
+    setMessage("관리자 PIN 번호가 변경되었습니다.");
+  }
+
+  return (
+    <div className="desktop-panel desktop-admin-security-panel">
+      <div>
+        <h2>관리자 보안</h2>
+        <p>초기 PIN 번호는 0000이며, 운용 전 반드시 변경하는 것을 권장합니다.</p>
+      </div>
+      <form onSubmit={handleSubmit} className="desktop-admin-change-form">
+        <label>
+          현재 PIN
+          <input type="password" inputMode="numeric" maxLength={4} value={currentPin} onChange={(event) => setCurrentPin(cleanPin(event.target.value))} placeholder="0000" />
+        </label>
+        <label>
+          새 PIN
+          <input type="password" inputMode="numeric" maxLength={4} value={nextPin} onChange={(event) => setNextPin(cleanPin(event.target.value))} placeholder="숫자 4자리" />
+        </label>
+        <label>
+          새 PIN 확인
+          <input type="password" inputMode="numeric" maxLength={4} value={confirmPin} onChange={(event) => setConfirmPin(cleanPin(event.target.value))} placeholder="다시 입력" />
+        </label>
+        <button type="submit">
+          <KeyRound size={16} />
+          PIN 변경
+        </button>
+        <button type="button" className="is-ghost" onClick={onLock}>관리자 잠금</button>
+      </form>
+      {message && <strong className={cx("desktop-admin-pin-message", isError && "is-error")}>{message}</strong>}
+    </div>
+  );
+}
+
 function DesktopSettings({
   catalog,
   selectedIds,
   activeType,
+  adminPin,
   onTypeChange,
   onToggle,
   onClear,
   onDefault,
   onSelectAllType,
+  onChangePin,
+  onLock,
 }: {
   catalog: TheOneOperation[];
   selectedIds: string[];
   activeType: OperationType;
+  adminPin: string;
   onTypeChange: (type: OperationType) => void;
   onToggle: (id: string) => void;
   onClear: () => void;
   onDefault: () => void;
   onSelectAllType: () => void;
+  onChangePin: (pin: string) => void;
+  onLock: () => void;
 }) {
   const candidates = catalog.filter((operation) => operation.type === activeType);
   const activeSelectedCount = candidates.filter((operation) => selectedIds.includes(operation.id)).length;
@@ -1768,6 +1922,7 @@ function DesktopSettings({
           <button type="button" onClick={onClear}>전체 초기화</button>
         </div>
       </div>
+      <AdminPinPanel adminPin={adminPin} onChangePin={onChangePin} onLock={onLock} />
       <div className="desktop-catalog-panel">
         {[...grouped.entries()].map(([provinceName, cityMap]) => {
           const provinceItems = [...cityMap.values()].flat();
