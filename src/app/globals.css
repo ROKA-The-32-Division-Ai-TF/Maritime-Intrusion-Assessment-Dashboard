@@ -2484,9 +2484,20 @@ body:has(.desktop-app) {
   overflow-y: hidden;
 }
 
+.desktop-main.is-settings {
+  height: auto;
+  min-height: 100dvh;
+  overflow-y: auto;
+}
+
 .desktop-content {
   min-height: 0;
   display: grid;
+}
+
+.desktop-main.is-settings .desktop-content {
+  min-height: auto;
+  display: block;
 }
 
 .desktop-content > section {
@@ -2567,7 +2578,7 @@ body:has(.desktop-app) {
 .desktop-alert-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 70;
+  z-index: 9999;
   display: grid;
   place-items: center;
   padding: 28px;
@@ -2589,6 +2600,7 @@ body:has(.desktop-app) {
     radial-gradient(circle at 100% 0%, rgba(37, 74, 165, 0.2), transparent 34%),
     #f7fbff;
   box-shadow: 0 34px 90px rgba(2, 12, 31, 0.34);
+  transform: translateZ(0);
 }
 
 .desktop-alert-modal header {
@@ -3101,20 +3113,6 @@ body:has(.desktop-app) {
   pointer-events: none;
 }
 
-.desktop-map-controls {
-  position: absolute;
-  right: 16px;
-  top: 16px;
-  z-index: 8;
-  display: flex;
-  gap: 7px;
-  padding: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.54);
-  border-radius: 16px;
-  background: rgba(7, 18, 42, 0.54);
-  backdrop-filter: blur(14px);
-}
-
 .desktop-map-type-switch {
   position: absolute;
   left: 16px;
@@ -3139,19 +3137,9 @@ body:has(.desktop-app) {
   color: var(--desktop-blue);
 }
 
-.desktop-map-controls button {
-  min-width: 38px;
-  height: 36px;
-  border: 0;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--desktop-blue);
-  font-weight: 950;
-}
-
 .desktop-map-marker {
   position: absolute;
-  z-index: 4;
+  z-index: 12;
   transform: translate(-50%, -50%);
   display: grid;
   justify-items: center;
@@ -3159,8 +3147,10 @@ body:has(.desktop-app) {
   border: 0;
   background: transparent;
   color: white;
-  padding: 0;
+  padding: 8px;
+  border-radius: 999px;
   filter: drop-shadow(0 9px 14px rgba(0, 0, 0, 0.42));
+  cursor: pointer;
 }
 
 .desktop-map-marker span {
@@ -3194,7 +3184,7 @@ body:has(.desktop-app) {
 }
 
 .desktop-map-marker.is-active {
-  z-index: 6;
+  z-index: 14;
 }
 
 .desktop-map-marker.has-alert {
@@ -3713,6 +3703,10 @@ body:has(.desktop-app) {
   gap: 10px;
 }
 
+.desktop-assessment-sheet .desktop-sheet-head h1 {
+  font-size: clamp(20px, 2.2vw, 32px);
+}
+
 .desktop-sheet-head {
   display: grid;
   grid-template-columns: minmax(170px, 0.55fr) minmax(0, 2.1fr) minmax(170px, 0.55fr);
@@ -3835,11 +3829,12 @@ body:has(.desktop-app) {
 .desktop-assessment-table th,
 .desktop-assessment-table td {
   min-width: 0;
-  height: clamp(35px, 5.2dvh, 50px);
-  padding: 5px 6px;
-  font-size: clamp(10px, 0.72vw, 13px);
-  line-height: 1.2;
-  white-space: normal;
+  height: clamp(31px, 4.7dvh, 44px);
+  padding: 4px 5px;
+  font-size: clamp(9px, 0.62vw, 11px);
+  line-height: 1.08;
+  white-space: nowrap;
+  word-break: keep-all;
 }
 
 .desktop-analysis-table thead th,
@@ -3851,11 +3846,11 @@ body:has(.desktop-app) {
 }
 
 .desktop-assessment-title-row th {
-  height: 46px;
+  height: 40px;
   background:
     linear-gradient(90deg, #bcd6ff, #e3efff 28%, #e3efff 72%, #bcd6ff) !important;
   color: var(--desktop-blue) !important;
-  font-size: 20px !important;
+  font-size: 17px !important;
   letter-spacing: 0;
 }
 
@@ -3917,8 +3912,8 @@ body:has(.desktop-app) {
   grid-template-rows: auto auto auto auto;
   align-content: start;
   gap: 16px;
-  height: 100%;
-  overflow-y: auto;
+  height: auto;
+  overflow: visible;
   padding-right: 2px;
 }
 
@@ -3955,8 +3950,8 @@ body:has(.desktop-app) {
 
 .desktop-catalog-panel {
   min-height: 0;
-  max-height: min(44dvh, 470px);
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
   padding: 16px;
 }
 
@@ -4070,7 +4065,11 @@ body:has(.desktop-app) {
   align-content: start;
   overflow: visible;
   gap: 14px;
-  padding: 20px;
+  padding: 22px;
+  border: 1px solid rgba(210, 224, 245, 0.96);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 74, 165, 0.09), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 255, 0.94));
 }
 
 .desktop-source-grid {
@@ -4084,12 +4083,13 @@ body:has(.desktop-app) {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
   gap: 7px 12px;
-  padding: 17px;
+  padding: 18px;
   border: 1px solid #dce7f6;
   border-radius: 18px;
   background:
     radial-gradient(circle at 94% 8%, rgba(37, 74, 165, 0.1), transparent 38%),
     #f8fbff;
+  box-shadow: 0 12px 30px rgba(15, 38, 78, 0.07);
 }
 
 .desktop-credit-card > * {

@@ -2,6 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import {
   Activity,
   Bell,
@@ -839,7 +840,7 @@ export function DesktopCommandApp() {
           })}
         </nav>
       </aside>
-      <main className="desktop-main">
+      <main className={cx("desktop-main", activeMenu === "settings" && "is-settings")}>
         <DesktopNewsTicker alerts={alertsForToday} />
         <div className="desktop-content">
           {activeMenu === "region" && (
@@ -913,53 +914,59 @@ function DesktopNewsTicker({ alerts }: { alerts: LiveAlert[] }) {
   const activeAlerts = alerts.filter((alert) => !alertIsEnded(alert));
   const endedAlerts = alerts.filter(alertIsEnded);
   const latestAlert = alerts[0];
+  const alertModal = open && typeof document !== "undefined"
+    ? createPortal(
+      <div className="desktop-alert-modal-backdrop" role="presentation" onClick={() => setOpen(false)}>
+        <section className="desktop-alert-modal" role="dialog" aria-modal="true" aria-label="최근 24시간 특보현황" onClick={(event) => event.stopPropagation()}>
+          <header>
+            <div>
+              <span>진행 중 특보 + 최근 24시간 해제 이력</span>
+              <h2>실시간 속보 현황</h2>
+            </div>
+            <button type="button" onClick={() => setOpen(false)} aria-label="닫기">×</button>
+          </header>
+          <div className="desktop-alert-modal-summary">
+            <article className={activeAlerts.length > 0 ? "is-active" : ""}>
+              <span>진행 중</span>
+              <strong>{activeAlerts.length}건</strong>
+            </article>
+            <article>
+              <span>최근 해제</span>
+              <strong>{endedAlerts.length}건</strong>
+            </article>
+            <article>
+              <span>최근 갱신</span>
+              <strong>{latestAlert ? new Date(latestAlert.timestamp).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }) : "대기"}</strong>
+            </article>
+          </div>
+          <div className="desktop-alert-modal-grid">
+            <AlertModalColumn title="현재 발효/변경" alerts={activeAlerts} empty="현재 표시할 발효 특보가 없습니다." />
+            <AlertModalColumn title="최근 24시간 해제" alerts={endedAlerts} empty="최근 24시간 이내 해제 특보가 없습니다." />
+          </div>
+        </section>
+      </div>,
+      document.body,
+    )
+    : null;
 
   return (
-    <section className="desktop-news-ticker" aria-label="전국 실시간 특보현황">
-      <button type="button" className="desktop-news-title" onClick={() => setOpen(true)}>
-        <Bell size={16} />
-        <strong>실시간 속보</strong>
-      </button>
-      <div className="desktop-news-window">
-        <div className={cx("desktop-news-track", visibleAlerts.length === 0 && "is-static")}>
-          {(visibleAlerts.length > 0 ? [...visibleAlerts, ...visibleAlerts] : []).map((alert, index) => (
-            <span key={`${alert.id}-news-${index}`}>{alertTickerText(alert)}</span>
-          ))}
-          {visibleAlerts.length === 0 && <span>최근 24시간 이내 신규 특보현황은 없습니다.</span>}
+    <>
+      <section className="desktop-news-ticker" aria-label="전국 실시간 특보현황">
+        <button type="button" className="desktop-news-title" onClick={() => setOpen(true)}>
+          <Bell size={16} />
+          <strong>실시간 속보</strong>
+        </button>
+        <div className="desktop-news-window">
+          <div className={cx("desktop-news-track", visibleAlerts.length === 0 && "is-static")}>
+            {(visibleAlerts.length > 0 ? [...visibleAlerts, ...visibleAlerts] : []).map((alert, index) => (
+              <span key={`${alert.id}-news-${index}`}>{alertTickerText(alert)}</span>
+            ))}
+            {visibleAlerts.length === 0 && <span>최근 24시간 이내 신규 특보현황은 없습니다.</span>}
+          </div>
         </div>
-      </div>
-      {open && (
-        <div className="desktop-alert-modal-backdrop" role="presentation" onClick={() => setOpen(false)}>
-          <section className="desktop-alert-modal" role="dialog" aria-modal="true" aria-label="최근 24시간 특보현황" onClick={(event) => event.stopPropagation()}>
-            <header>
-              <div>
-                <span>진행 중 특보 + 최근 24시간 해제 이력</span>
-                <h2>실시간 속보 현황</h2>
-              </div>
-              <button type="button" onClick={() => setOpen(false)} aria-label="닫기">×</button>
-            </header>
-            <div className="desktop-alert-modal-summary">
-              <article className={activeAlerts.length > 0 ? "is-active" : ""}>
-                <span>진행 중</span>
-                <strong>{activeAlerts.length}건</strong>
-              </article>
-              <article>
-                <span>최근 해제</span>
-                <strong>{endedAlerts.length}건</strong>
-              </article>
-              <article>
-                <span>최근 갱신</span>
-                <strong>{latestAlert ? new Date(latestAlert.timestamp).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }) : "대기"}</strong>
-              </article>
-            </div>
-            <div className="desktop-alert-modal-grid">
-              <AlertModalColumn title="현재 발효/변경" alerts={activeAlerts} empty="현재 표시할 발효 특보가 없습니다." />
-              <AlertModalColumn title="최근 24시간 해제" alerts={endedAlerts} empty="최근 24시간 이내 해제 특보가 없습니다." />
-            </div>
-          </section>
-        </div>
-      )}
-    </section>
+      </section>
+      {alertModal}
+    </>
   );
 }
 
@@ -1198,17 +1205,6 @@ function VworldMap({
       >
         <DesktopTypeSwitch activeType={activeType} onTypeChange={onTypeChange} />
       </div>
-      <div
-        className="desktop-map-controls"
-        aria-label="지도 조작"
-        onPointerDown={(event) => event.stopPropagation()}
-        onPointerMove={(event) => event.stopPropagation()}
-        onPointerUp={(event) => event.stopPropagation()}
-      >
-        <button type="button" onClick={(event) => { event.stopPropagation(); zoomBy(1); }} aria-label="지도 확대">+</button>
-        <button type="button" onClick={(event) => { event.stopPropagation(); zoomBy(-1); }} aria-label="지도 축소">-</button>
-        <button type="button" onClick={(event) => { event.stopPropagation(); setView(fittedView); }}>전체</button>
-      </div>
       {operations.map((operation) => {
         if (!operation.center) return null;
         const point = mercatorPixel(operation.center[0], operation.center[1], zoom);
@@ -1224,8 +1220,12 @@ function VworldMap({
               left: `calc(50% + ${point.x - centerPixel.x}px)`,
               top: `calc(50% + ${point.y - centerPixel.y}px)`,
             }}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={() => {
+            onPointerDown={(event) => {
+              dragMovedRef.current = false;
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
               if (dragMovedRef.current) return;
               onSelect(operation);
             }}
