@@ -1038,13 +1038,14 @@ function airDerived(values) {
   };
 }
 
-async function buildOperationUpdate(target) {
+async function buildOperationUpdate(target, options = {}) {
+  const includeDaily = options.includeDaily !== false;
   const sources = [];
   const [kma, air, riseSet, tide, tideRecent, waterTemp, tidalCurrent, asos, windProfiler] = await Promise.all([
     fetchKmaNowForecast(target).catch((error) => ({ error })),
     fetchAirKorea(target).catch((error) => ({ error })),
-    fetchRiseSet(target).catch((error) => ({ error })),
-    fetchTide(target).catch((error) => ({ error })),
+    includeDaily ? fetchRiseSet(target).catch((error) => ({ error })) : Promise.resolve(null),
+    includeDaily ? fetchTide(target).catch((error) => ({ error })) : Promise.resolve(null),
     fetchTideRecent(target).catch((error) => ({ error })),
     fetchWaterTemp(target).catch((error) => ({ error })),
     fetchTidalCurrent(target).catch((error) => ({ error })),
@@ -1242,9 +1243,38 @@ function liveAlerts(updates, officialAlerts = []) {
   return alerts.slice(0, 60);
 }
 
-async function livePayload() {
+function compactObject(value) {
+  if (!value) return undefined;
+  const entries = Object.entries(value).filter(([, item]) => item !== undefined);
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function mergeDefinedObject(previous, next) {
+  const merged = { ...(previous ?? {}) };
+  Object.entries(next ?? {}).forEach(([key, value]) => {
+    if (value !== undefined) merged[key] = value;
+  });
+  return compactObject(merged);
+}
+
+function mergeCacheUpdate(previous = {}, next = {}) {
+  const merged = {
+    ...previous,
+    ...next,
+    coastal: mergeDefinedObject(previous.coastal, next.coastal),
+    ground: mergeDefinedObject(previous.ground, next.ground),
+    air: mergeDefinedObject(previous.air, next.air),
+    coastalEnvironment: mergeDefinedObject(previous.coastalEnvironment, next.coastalEnvironment),
+    groundEnvironment: mergeDefinedObject(previous.groundEnvironment, next.groundEnvironment),
+    aviationEnvironment: mergeDefinedObject(previous.aviationEnvironment, next.aviationEnvironment),
+  };
+
+  return compactObject(merged) ?? next;
+}
+
+async function livePayload(options = {}) {
   const [results, officialAlerts, roadCctv, deployedCache, localCache] = await Promise.all([
-    Promise.all(operationTargets.map(buildOperationUpdate)),
+    Promise.all(operationTargets.map((target) => buildOperationUpdate(target, options))),
     fetchKmaWarningAlerts(),
     fetchRoadCctvWeather(),
     loadExistingCache(),
@@ -1259,7 +1289,7 @@ async function livePayload() {
   const updateMap = new Map(existingUpdates.filter((update) => update.id).map((update) => [update.id, update]));
 
   liveUpdates.forEach((update) => {
-    if (update.id) updateMap.set(update.id, update);
+    if (update.id) updateMap.set(update.id, mergeCacheUpdate(updateMap.get(update.id), update));
   });
 
   const updates = liveUpdates.length >= Math.min(8, operationTargets.length)
@@ -1291,7 +1321,7 @@ async function livePayload() {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
     validForSeconds: 43200,
-    sourceMode: "live",
+    sourceMode: options.sourceMode ?? "live",
     sources: [...sourceSet],
     operationUpdates: updates,
     alerts: liveAlerts(updates, alertSeed),
@@ -1345,10 +1375,15 @@ function hasLiveServiceKey() {
 
 async function main() {
   let payload;
+  const refreshScope = env("WEATHER_CACHE_REFRESH_SCOPE");
 
   try {
-    if (env("WEATHER_CACHE_REFRESH_SCOPE") === "alerts") {
+    if (refreshScope === "alerts") {
       payload = await alertOnlyPayload();
+    } else if (refreshScope === "observations") {
+      payload = hasLiveServiceKey()
+        ? await livePayload({ includeDaily: false, sourceMode: "live-observations" })
+        : (await loadPreparedFeed()) ?? await livePayload({ includeDaily: false, sourceMode: "live-observations" });
     } else {
       payload = hasLiveServiceKey()
         ? await livePayload()

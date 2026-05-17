@@ -1589,28 +1589,33 @@ function AltitudeLayersCard({ operation }: { operation: TheOneOperation }) {
 }
 
 function SettingsScreen({ operations, onReset }: { operations: TheOneOperation[]; onReset: () => void }) {
-  const apiSourceGroups: Array<{ title: string; icon: SimpleIcon; items: string[] }> = [
+  const apiSourceGroups: Array<{ title: string; icon: SimpleIcon; cadence: string; items: string[] }> = [
     {
-      title: "기상청",
+      title: "특보/속보",
       icon: Cloud,
-      items: ["API허브", "단기·초단기예보", "ASOS 관측", "기상특보", "위험기상 알림"],
+      cadence: "5분",
+      items: ["기상청 기상특보", "전국 특보 배너", "알림 기록"],
     },
     {
-      title: "해양",
-      icon: Waves,
-      items: ["해양기상 관측", "조석·조류 예보", "수온 검증"],
+      title: "일반 실황",
+      icon: Database,
+      cadence: "30분",
+      items: ["초단기실황/예보", "ASOS", "에어코리아", "조류·수온·조위 최신"],
     },
     {
-      title: "환경",
+      title: "천문/조석",
+      icon: Moon,
+      cadence: "하루 2회",
+      items: ["일출/일몰", "월출/월몰", "BMNT/EENT", "만조/간조"],
+    },
+    {
+      title: "승인 대기",
       icon: ShieldCheck,
-      items: ["에어코리아 대기질", "산림청 산불위험"],
-    },
-    {
-      title: "항공",
-      icon: Plane,
-      items: ["드론 저고도 기상", "운고·시정", "낙뢰·돌풍"],
+      cadence: "대체 표시",
+      items: ["해양기상관측", "AWS", "고층기상", "항공 세부자료"],
     },
   ];
+  const replacementItems = ["파고/파주기/먼바다 파고", "상층풍/돌풍/난류/운고", "체감/WBGT", "기관 승인 전 지점 관측값"];
   const creators = ["대위 정동호", "9급 전재문", "병장 김지성", "병장 김준우", "상병 김민규", "일병 임다민", "일병 전호성"];
 
   return (
@@ -1643,10 +1648,15 @@ function SettingsScreen({ operations, onReset }: { operations: TheOneOperation[]
             <article key={group.title}>
               <Icon size={20} />
               <strong>{group.title}</strong>
+              <b>{group.cadence}</b>
               <span>{group.items.join(" · ")}</span>
             </article>
             );
           })}
+        </div>
+        <div className="api-replacement-box">
+          <strong>현재 대체 표시 항목</strong>
+          <span>{replacementItems.join(" · ")}</span>
         </div>
         <div className="api-flow">
           <span>공공 API</span>

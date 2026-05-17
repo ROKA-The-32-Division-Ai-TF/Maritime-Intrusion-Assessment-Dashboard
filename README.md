@@ -1,6 +1,6 @@
 # 백룡 AI The One
 
-백룡 AI The One은 해안·지상·공중 작전기상을 한 화면에서 확인하는 모바일 우선 정적 웹앱입니다. 서버, DB, 외부 AI 호출 없이 mock 기상·환경 데이터를 기반으로 지역 목록, Windy 지도, 개황, 객관 지표를 표시합니다.
+백룡 AI The One은 해안·지상·공중 작전기상을 한 화면에서 확인하는 모바일 우선 정적 웹앱입니다. 서버, DB, 외부 AI 호출 없이 GitHub Actions가 만든 기상 JSON 캐시를 우선 사용하고, 공식 자료가 없을 때는 공개 가능한 fallback 값으로 지역 목록, 지도, 개황, 객관 지표를 표시합니다.
 
 ## 하위 체계
 
@@ -47,9 +47,9 @@
 - 화면 기능: 상단 뉴스형 배너, 알림 기록, 작전 유형별 필터링
 - 연동 방식: GitHub Secrets 또는 내부망 변환 서버에서 API 키를 사용하고, 결과 JSON만 정적 사이트로 전달
 
-현재 스크립트는 `WEATHER_CACHE_SOURCE_URL`이 있으면 준비된 JSON을 가져오고, 없으면 공개 가능한 fallback 캐시를 생성합니다. 실제 기상청·해양·천문·대기질·산불 API를 붙일 때도 프론트엔드 코드에는 키를 넣지 않습니다.
+현재 스크립트는 `WEATHER_CACHE_SOURCE_URL`이 있으면 준비된 JSON을 가져오고, 없으면 GitHub Secrets에 등록된 공공 API를 직접 호출합니다. API 키가 없거나 기관 승인 전 자료는 공개 가능한 fallback 캐시와 계산 보정값으로 화면을 유지합니다. 실제 기상청·해양·천문·대기질 API를 붙일 때도 프론트엔드 코드에는 키를 넣지 않습니다.
 
-현재 직접 호출하도록 준비된 API는 다음과 같습니다.
+현재 공식 수신하도록 준비된 API는 다음과 같습니다.
 
 - 기상청 단기예보 조회서비스 초단기실황/초단기예보: 기온, 강수량, 습도, 풍향, 풍속, 날씨 상태
 - 기상청 ASOS 시간자료: 시정, 기온, 습도, 풍향, 풍속, 강수량 보강
@@ -59,8 +59,15 @@
 - 국립해양조사원 조류예보 시계열: 유향, 유속
 - 국립해양조사원 조위관측소 최신 관측데이터/실측 수온: 수온, 조위관측 기반 해양 보강값
 
+갱신 주기는 값의 변동성과 GitHub Actions 운용 제한을 기준으로 나눕니다.
+
+- 특보/속보: 기상청 기상특보 조회서비스, 5분 간격
+- 일반 실황: 초단기실황/예보, ASOS, 에어코리아, 조류/수온/조위 최신 관측, 30분 간격
+- 천문/조석: 한국천문연구원 출몰시각과 국립해양조사원 조석예보, 하루 2회
+
 추가 연동 대기 API는 다음 Secrets 이름으로 분리해 둡니다. 키 값은 GitHub 저장소에 커밋하지 않고, GitHub Actions Secrets 또는 내부망 변환 서버 환경변수로만 관리합니다.
 
+- `KMA_WARNING_SERVICE_KEY`: 기상청 기상특보 조회서비스
 - `KMA_ASOS_SERVICE_KEY`: 기상청 지상(종관, ASOS) 시간자료 조회서비스
 - `KHOA_CURRENT_SERVICE_KEY`: 국립해양조사원 조류예보 시계열
 - `KHOA_TIDE_RECENT_SERVICE_KEY`: 국립해양조사원 조위관측소 최신 관측데이터
@@ -78,7 +85,12 @@
 - `KMA_UPPER_AIR_SERVICE_KEY`: 기상청 고층기상 자료
 - `KMA_BEACH_WEATHER_SERVICE_KEY`: 전국 해수욕장 날씨 조회서비스
 
-해양 파고와 파주기는 기상청 해양기상관측자료 권한 확보 전까지 기상청 초단기 풍속·강수 기반 추정값으로 유지합니다. 국립해양조사원 조류·조위·실측 수온 키가 설정되면 조류속도, 조류방향, 수온은 공식값으로 대체됩니다.
+현재 대체 표시 중인 항목은 다음과 같습니다.
+
+- 파고, 파주기, 파향, 먼바다 파고: 기상청 해양기상관측자료 기관 승인 전까지 기상청 초단기 풍속·강수 기반 추정값
+- 상층풍, 돌풍, 난류, 운고: 고층기상·연직바람·항공기상 지점 매핑 전까지 지상풍 기반 보정값
+- 체감온도, WBGT, 일부 생활기상지수: 생활기상지수 세부 연동 전까지 기온·습도·풍속 기반 계산값
+- 기관 승인 전 관측소 값: 기존 캐시 또는 fallback 값으로 표시
 
 ## 정적 운용 원칙
 
@@ -126,14 +138,14 @@ NEXT_PUBLIC_BASE_PATH=/Maritime-Intrusion-Assessment-Dashboard npm run build
 
 ## GitHub Actions 배포
 
-`.github/workflows/pages.yml`은 `main` 푸시, 수동 실행, 30분 주기 실행에서 다음 순서로 동작합니다.
+`.github/workflows/pages.yml`은 `main` 푸시, 수동 실행, 특보 5분 주기, 일반 실황 30분 주기, 천문·조석 하루 2회 주기에서 다음 순서로 동작합니다.
 
 1. 의존성 설치
 2. 기상 JSON 캐시 생성
 3. 정적 사이트 빌드
 4. GitHub Pages 배포
 
-Actions Secrets에 `PUBLIC_DATA_SERVICE_KEY`, `KMA_SERVICE_KEY`, `KMA_ASOS_SERVICE_KEY`, `KHOA_SERVICE_KEY`, `KHOA_CURRENT_SERVICE_KEY`, `KHOA_TIDE_RECENT_SERVICE_KEY`, `KHOA_WATER_TEMP_SERVICE_KEY`, `KASI_SERVICE_KEY`, `AIRKOREA_SERVICE_KEY`, `KHOA_TIDE_OBS_CODE_SEOSAN`, `KHOA_TIDE_OBS_CODE_DANGJIN`, `KHOA_TIDE_OBS_CODE_TAEAN`, `KHOA_TIDE_OBS_CODE_BORYEONG` 등을 넣으면 실제 캐시 갱신에 사용됩니다. 조류·수온 지점 코드가 조석 코드와 다르면 `KHOA_CURRENT_OBS_CODE_*`, `KHOA_TEMP_OBS_CODE_*`를 별도로 넣습니다. 추가 API는 위 `KMA_*_SERVICE_KEY` 이름으로 넣습니다. `WEATHER_CACHE_SOURCE_URL`을 넣으면 내부 변환 서버가 만든 JSON을 우선 사용합니다.
+Actions Secrets에 `PUBLIC_DATA_SERVICE_KEY`, `KMA_SERVICE_KEY`, `KMA_WARNING_SERVICE_KEY`, `KMA_ASOS_SERVICE_KEY`, `KHOA_SERVICE_KEY`, `KHOA_CURRENT_SERVICE_KEY`, `KHOA_TIDE_RECENT_SERVICE_KEY`, `KHOA_WATER_TEMP_SERVICE_KEY`, `KASI_SERVICE_KEY`, `AIRKOREA_SERVICE_KEY`, `KHOA_TIDE_OBS_CODE_SEOSAN`, `KHOA_TIDE_OBS_CODE_DANGJIN`, `KHOA_TIDE_OBS_CODE_TAEAN`, `KHOA_TIDE_OBS_CODE_BORYEONG` 등을 넣으면 실제 캐시 갱신에 사용됩니다. 조류·수온 지점 코드가 조석 코드와 다르면 `KHOA_CURRENT_OBS_CODE_*`, `KHOA_TEMP_OBS_CODE_*`를 별도로 넣습니다. 추가 API는 위 `KMA_*_SERVICE_KEY` 이름으로 넣습니다. `WEATHER_CACHE_SOURCE_URL`을 넣으면 내부 변환 서버가 만든 JSON을 우선 사용합니다.
 
 ## 보안 주의
 

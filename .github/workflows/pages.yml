@@ -5,7 +5,8 @@ on:
     branches:
       - main
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/5 * * * *"
+    - cron: "7,37 * * * *"
     - cron: "17 20,8 * * *"
   workflow_dispatch:
 
@@ -40,7 +41,7 @@ jobs:
       - name: Generate weather cache
         run: npm run update:weather-cache
         env:
-          WEATHER_CACHE_REFRESH_SCOPE: ${{ github.event_name == 'schedule' && github.event.schedule == '*/30 * * * *' && 'alerts' || 'full' }}
+          WEATHER_CACHE_REFRESH_SCOPE: ${{ github.event_name == 'schedule' && github.event.schedule == '*/5 * * * *' && 'alerts' || github.event_name == 'schedule' && github.event.schedule == '7,37 * * * *' && 'observations' || 'full' }}
           WEATHER_CACHE_EXISTING_URL: https://roka-the-32-division-ai-tf.github.io/Maritime-Intrusion-Assessment-Dashboard/data/weather-cache.json
           WEATHER_CACHE_SOURCE_URL: ${{ secrets.WEATHER_CACHE_SOURCE_URL }}
           WEATHER_CACHE_SOURCE_TOKEN: ${{ secrets.WEATHER_CACHE_SOURCE_TOKEN }}

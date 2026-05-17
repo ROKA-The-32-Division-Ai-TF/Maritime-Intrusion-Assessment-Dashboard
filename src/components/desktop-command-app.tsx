@@ -1810,17 +1810,43 @@ function DesktopSettings({
       </div>
       <div className="desktop-panel desktop-source-panel">
         <h2>저작권 표시</h2>
-        <div className="desktop-credit-card">
-          <Copyright size={20} />
-          <span>공공자료</span>
-          <strong>기상청 · 국립해양조사원 · 한국천문연구원 · 에어코리아 · 브이월드</strong>
-          <em>공공데이터 기반 캐시를 정적 사이트에 표시합니다.</em>
-        </div>
-        <div className="desktop-credit-card">
-          <MapIcon size={20} />
-          <span>지도자료</span>
-          <strong>브이월드 · Windy · 기상청 날씨누리 · 해양기상정보포털</strong>
-          <em>지도 화면은 각 제공기관의 원본 화면 및 정책을 따릅니다.</em>
+        <div className="desktop-source-grid">
+          <div className="desktop-credit-card is-wide">
+            <Copyright size={20} />
+            <span>공식 수신 중</span>
+            <strong>기상청 초단기실황/예보 · 기상특보 · ASOS · 한국천문연구원 · 국립해양조사원 · 에어코리아 · 브이월드</strong>
+            <em>API 키는 GitHub Secrets에서만 사용하고 화면은 변환된 JSON 캐시만 읽습니다.</em>
+          </div>
+          <div className="desktop-credit-card">
+            <Cloud size={20} />
+            <span>특보/속보</span>
+            <strong>기상청 기상특보 조회서비스</strong>
+            <em>GitHub Actions 제한에 맞춰 5분 간격으로 갱신합니다.</em>
+          </div>
+          <div className="desktop-credit-card">
+            <Database size={20} />
+            <span>일반 실황</span>
+            <strong>기상청 · ASOS · 조류/수온/조위 최신 · 에어코리아</strong>
+            <em>기온, 바람, 강수, 시정, 대기질 등은 30분 간격으로 갱신합니다.</em>
+          </div>
+          <div className="desktop-credit-card">
+            <Moon size={20} />
+            <span>천문/조석</span>
+            <strong>한국천문연구원 출몰시각 · 국립해양조사원 조석예보</strong>
+            <em>일출, 일몰, 월출, 월몰, BMNT, EENT, 만조, 간조는 하루 2회 갱신합니다.</em>
+          </div>
+          <div className="desktop-credit-card">
+            <MapIcon size={20} />
+            <span>지도자료</span>
+            <strong>브이월드 · Windy · 기상청 날씨누리 · 해양기상정보포털</strong>
+            <em>지도 화면은 각 제공기관의 원본 화면과 이용 정책을 따릅니다.</em>
+          </div>
+          <div className="desktop-credit-card is-muted is-wide">
+            <Waves size={20} />
+            <span>대체 표시 중</span>
+            <strong>해양기상관측자료, AWS, 고층기상 등 기관 승인 전 자료</strong>
+            <em>파고/파주기/먼바다 파고, 상층풍, 돌풍, 난류, 운고, 체감/WBGT는 승인 완료 전까지 공식 수신값과 기상식 기반 보정값으로 표시합니다.</em>
+          </div>
         </div>
         <div className="desktop-credit-card is-maker">
           <Users size={20} />
