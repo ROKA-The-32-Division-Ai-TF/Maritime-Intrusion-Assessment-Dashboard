@@ -240,9 +240,13 @@ function alertIsEnded(alert: LiveAlert) {
   return /해제|취소/.test([alert.rawTitle, alert.title, alert.message].filter(Boolean).join(" "));
 }
 
+function shouldShowAlert(alert: LiveAlert) {
+  return alertIsEnded(alert) ? isDailyAlert(alert) : true;
+}
+
 function dailyAlerts(alerts: LiveAlert[]) {
   return alerts
-    .filter(isDailyAlert)
+    .filter(shouldShowAlert)
     .sort((a, b) => alertTimestampMs(b) - alertTimestampMs(a));
 }
 
@@ -908,6 +912,7 @@ function DesktopNewsTicker({ alerts }: { alerts: LiveAlert[] }) {
   const visibleAlerts = alerts.slice(0, 14);
   const activeAlerts = alerts.filter((alert) => !alertIsEnded(alert));
   const endedAlerts = alerts.filter(alertIsEnded);
+  const latestAlert = alerts[0];
 
   return (
     <section className="desktop-news-ticker" aria-label="전국 실시간 특보현황">
@@ -928,14 +933,28 @@ function DesktopNewsTicker({ alerts }: { alerts: LiveAlert[] }) {
           <section className="desktop-alert-modal" role="dialog" aria-modal="true" aria-label="최근 24시간 특보현황" onClick={(event) => event.stopPropagation()}>
             <header>
               <div>
-                <span>최근 24시간 기준</span>
+                <span>진행 중 특보 + 최근 24시간 해제 이력</span>
                 <h2>실시간 속보 현황</h2>
               </div>
               <button type="button" onClick={() => setOpen(false)} aria-label="닫기">×</button>
             </header>
+            <div className="desktop-alert-modal-summary">
+              <article className={activeAlerts.length > 0 ? "is-active" : ""}>
+                <span>진행 중</span>
+                <strong>{activeAlerts.length}건</strong>
+              </article>
+              <article>
+                <span>최근 해제</span>
+                <strong>{endedAlerts.length}건</strong>
+              </article>
+              <article>
+                <span>최근 갱신</span>
+                <strong>{latestAlert ? new Date(latestAlert.timestamp).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }) : "대기"}</strong>
+              </article>
+            </div>
             <div className="desktop-alert-modal-grid">
-              <AlertModalColumn title="발표 · 변경" alerts={activeAlerts} empty="현재 표시할 발표·변경 특보가 없습니다." />
-              <AlertModalColumn title="해제 · 종료" alerts={endedAlerts} empty="최근 24시간 이내 해제 특보가 없습니다." />
+              <AlertModalColumn title="현재 발효/변경" alerts={activeAlerts} empty="현재 표시할 발효 특보가 없습니다." />
+              <AlertModalColumn title="최근 24시간 해제" alerts={endedAlerts} empty="최근 24시간 이내 해제 특보가 없습니다." />
             </div>
           </section>
         </div>
@@ -953,6 +972,7 @@ function AlertModalColumn({ title, alerts, empty }: { title: string; alerts: Liv
           <article key={`modal-${title}-${alert.id}`}>
             <strong>{alert.regionText || alert.source}</strong>
             <span>{alert.rawTitle ?? alert.title}</span>
+            <p>{alert.message}</p>
             <em>{new Date(alert.timestamp).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}</em>
           </article>
         )) : (

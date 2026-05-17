@@ -2579,7 +2579,7 @@ body:has(.desktop-app) {
   width: min(980px, 100%);
   max-height: min(760px, calc(100dvh - 56px));
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 16px;
   overflow: hidden;
   padding: 20px;
@@ -2626,6 +2626,42 @@ body:has(.desktop-app) {
   font-weight: 900;
 }
 
+.desktop-alert-modal-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.desktop-alert-modal-summary article {
+  display: grid;
+  gap: 4px;
+  padding: 14px 15px;
+  border: 1px solid #d9e5f5;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 74, 165, 0.1), transparent 38%),
+    #ffffff;
+}
+
+.desktop-alert-modal-summary article.is-active {
+  border-color: rgba(227, 67, 67, 0.28);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(227, 67, 67, 0.12), transparent 38%),
+    #ffffff;
+}
+
+.desktop-alert-modal-summary span {
+  color: var(--desktop-muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.desktop-alert-modal-summary strong {
+  color: var(--desktop-blue);
+  font-size: 20px;
+  font-weight: 950;
+}
+
 .desktop-alert-modal-grid {
   min-height: 0;
   display: grid;
@@ -2650,7 +2686,7 @@ body:has(.desktop-app) {
 }
 
 .desktop-alert-modal-column article,
-.desktop-alert-modal-column p {
+.desktop-alert-modal-column > div > p {
   display: grid;
   gap: 5px;
   margin: 0;
@@ -2674,6 +2710,13 @@ body:has(.desktop-app) {
   line-height: 1.4;
   font-style: normal;
   font-weight: 850;
+}
+
+.desktop-alert-modal-column article p {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 @keyframes desktop-news-roll {
@@ -4026,24 +4069,31 @@ body:has(.desktop-app) {
   min-height: 0;
   align-content: start;
   overflow: visible;
+  gap: 14px;
+  padding: 20px;
 }
 
 .desktop-source-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .desktop-credit-card {
+  min-width: 0;
   display: grid;
-  grid-template-columns: 28px 1fr;
-  gap: 5px 10px;
-  padding: 13px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 7px 12px;
+  padding: 17px;
   border: 1px solid #dce7f6;
-  border-radius: 16px;
+  border-radius: 18px;
   background:
     radial-gradient(circle at 94% 8%, rgba(37, 74, 165, 0.1), transparent 38%),
     #f8fbff;
+}
+
+.desktop-credit-card > * {
+  min-width: 0;
 }
 
 .desktop-credit-card.is-wide {
@@ -4071,17 +4121,20 @@ body:has(.desktop-app) {
 .desktop-source-panel strong,
 .desktop-source-panel b {
   color: #25334d;
-  font-size: 13px;
-  line-height: 1.35;
-  font-weight: 850;
+  font-size: 14px;
+  line-height: 1.42;
+  font-weight: 900;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .desktop-source-panel em {
   color: var(--desktop-muted);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.52;
   font-style: normal;
   font-weight: 800;
+  word-break: keep-all;
 }
 
 .desktop-credit-card.is-maker {
