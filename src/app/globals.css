@@ -2590,17 +2590,19 @@ body:has(.desktop-app) {
   width: min(980px, 100%);
   max-height: min(760px, calc(100dvh - 56px));
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 16px;
   overflow: hidden;
-  padding: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.36);
+  padding: 22px;
+  border: 1px solid rgba(137, 173, 242, 0.42);
   border-radius: 26px;
   background:
-    radial-gradient(circle at 100% 0%, rgba(37, 74, 165, 0.2), transparent 34%),
-    #f7fbff;
+    radial-gradient(circle at 100% 0%, rgba(64, 111, 217, 0.42), transparent 38%),
+    radial-gradient(circle at 0% 100%, rgba(12, 183, 221, 0.16), transparent 36%),
+    linear-gradient(145deg, #0b1732, #142b59 62%, #1d376c);
   box-shadow: 0 34px 90px rgba(2, 12, 31, 0.34);
   transform: translateZ(0);
+  color: #f8fbff;
 }
 
 .desktop-alert-modal header {
@@ -2611,7 +2613,7 @@ body:has(.desktop-app) {
 }
 
 .desktop-alert-modal header span {
-  color: var(--desktop-muted);
+  color: rgba(226, 237, 255, 0.78);
   font-size: 12px;
   font-weight: 900;
 }
@@ -2619,7 +2621,7 @@ body:has(.desktop-app) {
 .desktop-alert-modal h2,
 .desktop-alert-modal h3 {
   margin: 0;
-  color: var(--desktop-blue);
+  color: #f8fbff;
   font-weight: 950;
 }
 
@@ -2632,7 +2634,7 @@ body:has(.desktop-app) {
   height: 42px;
   border: 0;
   border-radius: 999px;
-  background: var(--desktop-blue);
+  background: rgba(255, 255, 255, 0.16);
   color: white;
   font-size: 24px;
   font-weight: 900;
@@ -2648,30 +2650,71 @@ body:has(.desktop-app) {
   display: grid;
   gap: 4px;
   padding: 14px 15px;
-  border: 1px solid #d9e5f5;
+  border: 1px solid rgba(145, 177, 238, 0.3);
   border-radius: 18px;
   background:
-    radial-gradient(circle at 100% 0%, rgba(37, 74, 165, 0.1), transparent 38%),
-    #ffffff;
+    radial-gradient(circle at 100% 0%, rgba(118, 164, 255, 0.18), transparent 38%),
+    rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .desktop-alert-modal-summary article.is-active {
-  border-color: rgba(227, 67, 67, 0.28);
+  border-color: rgba(255, 112, 112, 0.45);
   background:
-    radial-gradient(circle at 100% 0%, rgba(227, 67, 67, 0.12), transparent 38%),
-    #ffffff;
+    radial-gradient(circle at 100% 0%, rgba(255, 79, 79, 0.22), transparent 38%),
+    rgba(255, 255, 255, 0.1);
 }
 
 .desktop-alert-modal-summary span {
-  color: var(--desktop-muted);
+  color: rgba(226, 237, 255, 0.72);
   font-size: 12px;
   font-weight: 900;
 }
 
 .desktop-alert-modal-summary strong {
-  color: var(--desktop-blue);
+  color: #ffffff;
   font-size: 20px;
   font-weight: 950;
+}
+
+.desktop-alert-empty-banner {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 15px 16px;
+  border: 1px solid rgba(145, 177, 238, 0.34);
+  border-radius: 18px;
+  background:
+    linear-gradient(90deg, rgba(248, 193, 61, 0.16), rgba(255, 255, 255, 0.08));
+}
+
+.desktop-alert-empty-banner.has-alerts {
+  background:
+    linear-gradient(90deg, rgba(67, 214, 128, 0.15), rgba(255, 255, 255, 0.08));
+}
+
+.desktop-alert-empty-banner svg {
+  color: #f8c13d;
+}
+
+.desktop-alert-empty-banner.has-alerts svg {
+  color: #43d680;
+}
+
+.desktop-alert-empty-banner strong {
+  display: block;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 950;
+}
+
+.desktop-alert-empty-banner span {
+  display: block;
+  margin-top: 3px;
+  color: rgba(226, 237, 255, 0.74);
+  font-size: 12px;
+  font-weight: 850;
 }
 
 .desktop-alert-modal-grid {
@@ -2703,13 +2746,13 @@ body:has(.desktop-app) {
   gap: 5px;
   margin: 0;
   padding: 13px;
-  border: 1px solid #d9e5f5;
+  border: 1px solid rgba(145, 177, 238, 0.28);
   border-radius: 16px;
-  background: white;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .desktop-alert-modal-column strong {
-  color: #172238;
+  color: #ffffff;
   font-size: 13px;
   font-weight: 950;
 }
@@ -2717,11 +2760,15 @@ body:has(.desktop-app) {
 .desktop-alert-modal-column span,
 .desktop-alert-modal-column em,
 .desktop-alert-modal-column p {
-  color: var(--desktop-muted);
+  color: rgba(226, 237, 255, 0.76);
   font-size: 12px;
   line-height: 1.4;
   font-style: normal;
   font-weight: 850;
+}
+
+.desktop-alert-modal-column h3 {
+  color: #ffffff;
 }
 
 .desktop-alert-modal-column article p {

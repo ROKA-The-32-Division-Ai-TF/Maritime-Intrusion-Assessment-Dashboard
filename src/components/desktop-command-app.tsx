@@ -939,6 +939,13 @@ function DesktopNewsTicker({ alerts }: { alerts: LiveAlert[] }) {
               <strong>{latestAlert ? new Date(latestAlert.timestamp).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }) : "대기"}</strong>
             </article>
           </div>
+          <div className={cx("desktop-alert-empty-banner", alerts.length > 0 && "has-alerts")}>
+            <Bell size={22} />
+            <div>
+              <strong>{alerts.length > 0 ? "표시 중인 실시간 속보를 확인하세요" : "현재 수신된 실시간 속보가 없습니다"}</strong>
+              <span>{alerts.length > 0 ? "아래 목록에서 발효/변경과 해제 이력을 구분해 확인할 수 있습니다." : "기상특보 캐시는 5분 간격으로 확인 중입니다."}</span>
+            </div>
+          </div>
           <div className="desktop-alert-modal-grid">
             <AlertModalColumn title="현재 발효/변경" alerts={activeAlerts} empty="현재 표시할 발효 특보가 없습니다." />
             <AlertModalColumn title="최근 24시간 해제" alerts={endedAlerts} empty="최근 24시간 이내 해제 특보가 없습니다." />
