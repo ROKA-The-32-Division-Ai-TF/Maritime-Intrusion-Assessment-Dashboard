@@ -88,8 +88,9 @@ const ALERT_HISTORY_STORAGE_KEY = "baekryong-the-one-alert-history-v2";
 const OPERATION_TYPES: OperationType[] = ["coastal", "ground", "air"];
 const STORAGE_KEY = "baekryong-the-one-operations-v4";
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-const FORECAST_LABELS = ["18:00", "20:00", "22:00", "00:00", "02:00", "04:00", "06:00"];
+const FORECAST_LABELS = ["현재", "+2h", "+4h", "+6h", "+8h", "+10h", "+12h", "+14h", "+16h", "+18h", "+20h", "+22h", "+24h"];
 const WEEK_LABELS = ["오늘", "수", "목", "금", "토", "일", "월"];
+const HOURLY_DELTAS = [-0.55, -0.38, -0.2, 0, 0.25, 0.48, 0.58, 0.4, 0.15, -0.1, -0.32, -0.5, -0.62];
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -112,15 +113,15 @@ function ModeMenuIcon({ type }: { type: OperationType }) {
 }
 
 function trend(base: number, spread: number, floor = 0) {
-  return [-0.7, -0.25, 0, 0.2, 0.55, 0.12, -0.38].map((delta) => Math.max(floor, Number((base + delta * spread).toFixed(1))));
+  return HOURLY_DELTAS.map((delta) => Math.max(floor, Number((base + delta * spread).toFixed(1))));
 }
 
 function metricTrend(base: number, spread: number, floor = 0) {
-  return [-0.55, -0.24, 0, 0.36, 0.58, 0.2, -0.18].map((delta) => Math.max(floor, Number((base + delta * spread).toFixed(1))));
+  return HOURLY_DELTAS.map((delta) => Math.max(floor, Number((base + delta * spread).toFixed(1))));
 }
 
 function forecastTrend(base: number, spread: number, floor = 0, ceiling = 100) {
-  return [-0.55, -0.2, 0.18, 0.48, 0.22, -0.25, -0.58].map((delta) => Math.min(ceiling, Math.max(floor, Math.round(base + delta * spread))));
+  return HOURLY_DELTAS.map((delta) => Math.min(ceiling, Math.max(floor, Math.round(base + delta * spread))));
 }
 
 function clampIndex(value: number) {

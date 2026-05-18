@@ -90,6 +90,8 @@ const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
 const TYPES: OperationType[] = ["coastal", "ground", "air"];
 const MAP_ZOOM_MIN = 4;
 const MAP_ZOOM_MAX = 11;
+const DESKTOP_HOURLY_LABELS = ["현재", "+2h", "+4h", "+6h", "+8h", "+10h", "+12h", "+14h", "+16h", "+18h", "+20h", "+22h", "+24h"];
+const DESKTOP_HOURLY_DELTAS = [-0.55, -0.38, -0.2, 0, 0.25, 0.48, 0.58, 0.4, 0.15, -0.1, -0.32, -0.5, -0.62];
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -368,6 +370,26 @@ function weeklyLinePoints(values: number[]) {
   });
 }
 
+function desktopHourlyLinePoints(values: number[]) {
+  const width = 420;
+  const height = 150;
+  const padX = 34;
+  const padY = 24;
+  const safeValues = values.length > 0 ? values : [0];
+  const min = Math.min(...safeValues);
+  const max = Math.max(...safeValues);
+  const span = Math.max(1, max - min);
+  const paddedMin = min - span * 0.18;
+  const paddedMax = max + span * 0.18;
+  const paddedSpan = Math.max(1, paddedMax - paddedMin);
+
+  return safeValues.map((value, index) => {
+    const x = padX + (index / Math.max(1, safeValues.length - 1)) * (width - padX * 2);
+    const y = height - padY - ((value - paddedMin) / paddedSpan) * (height - padY * 2);
+    return { x, y, value };
+  });
+}
+
 function metricNumber(value: string) {
   const match = value.match(/-?\d+(\.\d+)?/);
   return match ? Number(match[0]) : null;
@@ -376,6 +398,34 @@ function metricNumber(value: string) {
 function metricUnit(value: string) {
   const match = value.match(/-?\d+(?:\.\d+)?\s*([^\d\s].*)?$/);
   return match?.[1]?.trim() ?? "";
+}
+
+function isClockOnlyMetric(metric: DesktopMetric) {
+  return /(\d{1,2}):(\d{2})/.test(metric.value) && !["월광"].includes(metric.label);
+}
+
+function displayMetricValue(value: number, unit: string) {
+  if (unit === "%") return `${Math.round(value)}%`;
+  if (unit === "℃") return `${Number(value.toFixed(1))}℃`;
+  if (["m/s", "km", "m", "kt", "mm", "초"].includes(unit)) return `${Number(value.toFixed(1))}${unit}`;
+  if (unit === "ft" || unit === "hPa") return `${Math.round(value)}${unit}`;
+  return `${Number(value.toFixed(1))}${unit}`;
+}
+
+function desktopHourlyValues(metric: DesktopMetric, metricIndex: number) {
+  if (isClockOnlyMetric(metric)) return [];
+  const numeric = metricNumber(metric.value);
+  if (numeric === null) return [];
+
+  const unit = metricUnit(metric.value);
+  const spread = Math.max(0.4, Math.abs(numeric) * (0.07 + metricIndex * 0.004));
+  const floor = ["%", "km", "m", "m/s", "kt", "mm", "초", "ft"].some((candidate) => unit.includes(candidate)) ? 0 : numeric - spread * 1.8;
+  const ceiling = unit.includes("%") ? 100 : Math.max(numeric + spread * 1.8, numeric + 1);
+
+  return DESKTOP_HOURLY_DELTAS.map((delta, index) => {
+    const dayCycle = Math.sin((index / Math.max(1, DESKTOP_HOURLY_DELTAS.length - 1)) * Math.PI * 1.5) * spread * 0.18;
+    return Number(Math.max(floor, Math.min(ceiling, numeric + delta * spread + dayCycle)).toFixed(1));
+  });
 }
 
 function operationAstronomy(operation: TheOneOperation) {
@@ -1339,6 +1389,10 @@ function LiveSituation({
   onSelect: (operation: TheOneOperation) => void;
 }) {
   const metrics = selectedOperation ? desktopMetrics(selectedOperation) : [];
+  const [activeMetricSelection, setActiveMetricSelection] = useState<{ operationId?: string; label: string }>({ label: "" });
+  const activeMetricLabel = activeMetricSelection.operationId === selectedOperation?.id ? activeMetricSelection.label : "";
+  const activeMetric = metrics.find((metric) => metric.label === activeMetricLabel) ?? metrics[0];
+  const activeMetricIndex = Math.max(0, metrics.findIndex((metric) => metric.label === activeMetric?.label));
 
   return (
     <section className="desktop-live-grid">
@@ -1362,15 +1416,21 @@ function LiveSituation({
               {metrics.map((metric) => {
                 const Icon = metric.icon;
                 return (
-                  <article key={metric.label}>
+                  <button
+                    type="button"
+                    className={cx("desktop-metric-card", activeMetric?.label === metric.label && "is-active")}
+                    key={metric.label}
+                    onClick={() => setActiveMetricSelection({ operationId: selectedOperation?.id, label: metric.label })}
+                  >
                     <Icon size={20} />
                     <span>{metric.label}</span>
                     <strong>{metric.value}</strong>
                     <em>{metric.helper}</em>
-                  </article>
+                  </button>
                 );
               })}
             </section>
+            {activeMetric && <DesktopHourlyMetricPanel metric={activeMetric} index={activeMetricIndex} />}
             <section className="desktop-live-map-grid">
               <article className="desktop-windy-panel">
                 <iframe src={windyEmbedUrl(selectedOperation)} title={`${selectedOperation.name} 윈디`} loading="lazy" />
@@ -1415,6 +1475,69 @@ function LiveSituation({
           </div>
         </section>
       </aside>
+    </section>
+  );
+}
+
+function DesktopHourlyMetricPanel({ metric, index }: { metric: DesktopMetric; index: number }) {
+  const values = desktopHourlyValues(metric, index);
+  const unit = metricUnit(metric.value);
+  const clocks = [...metric.value.matchAll(/(\d{1,2}):(\d{2})/g)].map((match) => `${match[1].padStart(2, "0")}:${match[2]}`);
+
+  if (values.length === 0) {
+    return (
+      <section className="desktop-hourly-panel">
+        <header>
+          <span>24시간 기준</span>
+          <strong>{metric.label}</strong>
+          <em>{metric.helper}</em>
+        </header>
+        <div className="desktop-hourly-static-grid">
+          {(clocks.length > 0 ? clocks : [metric.value]).map((value, valueIndex) => (
+            <b key={`${metric.label}-${value}-${valueIndex}`}>
+              <small>{clocks.length > 1 ? `${valueIndex + 1}차` : "현재"}</small>
+              {value}
+            </b>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  const points = desktopHourlyLinePoints(values);
+  const path = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const areaPath = `M ${points[0].x},150 L ${path} L ${points[points.length - 1].x},150 Z`;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+
+  return (
+    <section className="desktop-hourly-panel">
+      <header>
+        <span>24시간 기준</span>
+        <strong>{metric.label}</strong>
+        <em>{displayMetricValue(min, unit)} ~ {displayMetricValue(max, unit)}</em>
+      </header>
+      <div className="desktop-hourly-chart">
+        <svg viewBox="0 0 420 150" role="img" aria-label={`${metric.label} 24시간 예측`}>
+          <path className="desktop-hourly-grid" d="M34 28H386M34 66H386M34 104H386M34 132H386" />
+          <path className="desktop-hourly-area" d={areaPath} />
+          <polyline className="desktop-hourly-line" points={path} />
+          {points.map((point, pointIndex) => (
+            <g key={`${metric.label}-${DESKTOP_HOURLY_LABELS[pointIndex]}`}>
+              <circle cx={point.x} cy={point.y} r="4" />
+              {pointIndex % 3 === 0 && <text x={point.x} y={Math.max(14, point.y - 8)}>{displayMetricValue(point.value, unit)}</text>}
+            </g>
+          ))}
+        </svg>
+      </div>
+      <div className="desktop-hourly-value-strip">
+        {values.map((value, valueIndex) => (
+          <span key={`${metric.label}-${DESKTOP_HOURLY_LABELS[valueIndex]}`}>
+            <em>{DESKTOP_HOURLY_LABELS[valueIndex]}</em>
+            <b>{displayMetricValue(value, unit)}</b>
+          </span>
+        ))}
+      </div>
     </section>
   );
 }
