@@ -1847,7 +1847,7 @@ function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOpera
       isNorthSea: true,
     },
   ];
-  const regionTableRows = [...operationWeatherRows, ...northSeaRows];
+  const regionTableRows = operationWeatherRows;
 
   return (
     <section className="desktop-sheet desktop-operation-weather-sheet">
@@ -1920,93 +1920,136 @@ function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOpera
       </div>
 
       <div className="desktop-operation-weather-grid">
-        <div className="desktop-table-scroll">
-          <table className="desktop-operation-region-table">
-            <thead>
-              <tr>
-                <th colSpan={4}>작전지역 · 북한 해역</th>
-              </tr>
-              <tr>
-                <th>지역</th>
-                <th>개황</th>
-                <th>기온</th>
-                <th>환경</th>
-              </tr>
-            </thead>
-            <tbody>
-              {regionTableRows.map((row) => (
-                <tr key={`operation-weather-region-${row.id}`} className={row.isNorthSea ? "is-north-sea" : undefined}>
-                  <th>{row.name}</th>
-                  <td>{row.weather}</td>
-                  <td>{row.temperature}</td>
-                  <td>{row.environment}</td>
+        <section className="desktop-operation-panel">
+          <header>
+            <strong>작전지역 현황</strong>
+            <span>선택지역 기준</span>
+          </header>
+          <div className="desktop-table-scroll">
+            <table className="desktop-operation-region-table">
+              <thead>
+                <tr>
+                  <th>지역</th>
+                  <th>개황</th>
+                  <th>기온</th>
+                  <th>환경</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="desktop-table-scroll">
-          <table className="desktop-operation-sea-table">
-            <thead>
-              <tr>
-                <th>구분</th>
-                {seaColumns.map((operation) => (
-                  <th key={`sea-head-${operation.id}`}>{cleanName(operation)}</th>
+              </thead>
+              <tbody>
+                {regionTableRows.map((row) => (
+                  <tr key={`operation-weather-region-${row.id}`} className={row.isNorthSea ? "is-north-sea" : undefined}>
+                    <th>{row.name}</th>
+                    <td>{row.weather}</td>
+                    <td>{row.temperature}</td>
+                    <td>{row.environment}</td>
+                  </tr>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { label: "간조", value: (data: NonNullable<TheOneOperation["coastal"]>) => shiftedClockPair(data.lowTide, dayOffset) },
-                { label: "만조", value: (data: NonNullable<TheOneOperation["coastal"]>) => shiftedClockPair(data.highTide, dayOffset) },
-                { label: "파고원해", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.offshoreWaveHeightM, dayOffset, 0.22, 0, 7)}m` },
-                { label: "파고내해", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.nearshoreWaveHeightM, dayOffset, 0.16, 0, 5)}m` },
-                { label: "수온", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.waterTempC, dayOffset, 0.25, -3, 35)}℃` },
-                { label: "시정", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.visibilityKm, dayOffset, 0.7, 0, 40)}km` },
-              ].map((row) => (
-                <tr key={`operation-weather-sea-${row.label}`}>
-                  <th>{row.label}</th>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="desktop-operation-panel">
+          <header>
+            <strong>해양 제원</strong>
+            <span>간조 · 만조 · 파고 · 수온 · 시정</span>
+          </header>
+          <div className="desktop-table-scroll">
+            <table className="desktop-operation-sea-table">
+              <thead>
+                <tr>
+                  <th>구분</th>
                   {seaColumns.map((operation) => (
-                    <td key={`${row.label}-${operation.id}`}>{operation.coastal ? row.value(operation.coastal) : "-"}</td>
+                    <th key={`sea-head-${operation.id}`}>{cleanName(operation)}</th>
                   ))}
                 </tr>
-              ))}
+              </thead>
+              <tbody>
+                {[
+                  { label: "간조", value: (data: NonNullable<TheOneOperation["coastal"]>) => shiftedClockPair(data.lowTide, dayOffset) },
+                  { label: "만조", value: (data: NonNullable<TheOneOperation["coastal"]>) => shiftedClockPair(data.highTide, dayOffset) },
+                  { label: "파고원해", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.offshoreWaveHeightM, dayOffset, 0.22, 0, 7)}m` },
+                  { label: "파고내해", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.nearshoreWaveHeightM, dayOffset, 0.16, 0, 5)}m` },
+                  { label: "수온", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.waterTempC, dayOffset, 0.25, -3, 35)}℃` },
+                  { label: "시정", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.visibilityKm, dayOffset, 0.7, 0, 40)}km` },
+                ].map((row) => (
+                  <tr key={`operation-weather-sea-${row.label}`}>
+                    <th>{row.label}</th>
+                    {seaColumns.map((operation) => (
+                      <td key={`${row.label}-${operation.id}`}>{operation.coastal ? row.value(operation.coastal) : "-"}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="desktop-operation-panel is-north">
+          <header>
+            <strong>북한 해역</strong>
+            <span>해주 · 남포</span>
+          </header>
+          <div className="desktop-operation-north-list">
+            {northSeaRows.map((row) => (
+              <article key={`north-sea-${row.id}`}>
+                <strong>{row.name}</strong>
+                <dl>
+                  <div>
+                    <dt>개황</dt>
+                    <dd>{row.weather}</dd>
+                  </div>
+                  <div>
+                    <dt>기온</dt>
+                    <dd>{row.temperature}</dd>
+                  </div>
+                  <div>
+                    <dt>환경</dt>
+                    <dd>{row.environment}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <section className="desktop-operation-panel is-week">
+        <header>
+          <strong>주간 전망</strong>
+          <span>개황 · 상층풍 · 월광</span>
+        </header>
+        <div className="desktop-table-scroll">
+          <table className="desktop-operation-week-table">
+            <tbody>
+              <tr>
+                <th>구분</th>
+                {weekDates.map((date) => (
+                  <th key={`week-date-${date.year}-${date.month}-${date.day}`}>{String(date.month).padStart(2, "0")}.{String(date.day).padStart(2, "0")}({KOREAN_WEEKDAYS[datePartsToUtcDate(date).getUTCDay()]})</th>
+                ))}
+              </tr>
+              <tr>
+                <th>개황</th>
+                {weekDates.map((date, index) => (
+                  <td key={`week-weather-${date.day}`}>{dateAdjustedWeather(weather, dayOffset + index)}</td>
+                ))}
+              </tr>
+              <tr>
+                <th>상층풍</th>
+                {weekDates.map((date, index) => (
+                  <td key={`week-wind-${date.day}`}>{first.upperWindDirection} / {dateAdjustedNumber(first.upperWindSpeedMs, dayOffset + index, 0.9, 0, 60)}m/s</td>
+                ))}
+              </tr>
+              <tr>
+                <th>월광</th>
+                {weekDates.map((date, index) => (
+                  <td key={`week-moon-${date.day}`}>{Math.max(0, Math.min(100, first.moonlightPercent + index * 4))}%</td>
+                ))}
+              </tr>
             </tbody>
           </table>
         </div>
-      </div>
-
-      <div className="desktop-table-scroll">
-        <table className="desktop-operation-week-table">
-          <tbody>
-            <tr>
-              <th>주간기상</th>
-              {weekDates.map((date) => (
-                <th key={`week-date-${date.year}-${date.month}-${date.day}`}>{String(date.month).padStart(2, "0")}.{String(date.day).padStart(2, "0")}({KOREAN_WEEKDAYS[datePartsToUtcDate(date).getUTCDay()]})</th>
-              ))}
-            </tr>
-            <tr>
-              <th>개황</th>
-              {weekDates.map((date, index) => (
-                <td key={`week-weather-${date.day}`}>{dateAdjustedWeather(weather, dayOffset + index)}</td>
-              ))}
-            </tr>
-            <tr>
-              <th>상층풍</th>
-              {weekDates.map((date, index) => (
-                <td key={`week-wind-${date.day}`}>{first.upperWindDirection} / {dateAdjustedNumber(first.upperWindSpeedMs, dayOffset + index, 0.9, 0, 60)}m/s</td>
-              ))}
-            </tr>
-            <tr>
-              <th>월광</th>
-              {weekDates.map((date, index) => (
-                <td key={`week-moon-${date.day}`}>{Math.max(0, Math.min(100, first.moonlightPercent + index * 4))}%</td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      </section>
     </section>
   );
 }
