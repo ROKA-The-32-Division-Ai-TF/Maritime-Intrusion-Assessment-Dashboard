@@ -1798,7 +1798,7 @@ function OperationWeatherAnalysisSheet({ operations, alerts }: { operations: The
   const firstOperation = coastal[0];
   const first = firstOperation?.coastal;
   const firstEnvironment = firstOperation?.coastalEnvironment;
-  const weatherRows = coastal.slice(0, 6);
+  const weatherRows = coastal.slice(0, 4);
   const seaColumns = coastal.slice(0, 3);
   const weekDates = Array.from({ length: 7 }, (_, index) => {
     const date = datePartsToUtcDate(sheetDate);
@@ -1821,16 +1821,56 @@ function OperationWeatherAnalysisSheet({ operations, alerts }: { operations: The
   const alertSummary = alertItems.length > 0
     ? alertItems.slice(0, 2).map((alert) => `${alert.operationName} ${alert.title}`).join(" · ")
     : fallbackWarnings.slice(0, 2).join(" · ") || "선택지역 특보 없음";
+  function warningForOperation(operation: TheOneOperation) {
+    const matchedAlert = alertsForOperation(alerts, operation)[0];
+    return matchedAlert?.title ?? (operation.coastal?.weatherAlert && operation.coastal.weatherAlert !== "없음" ? operation.coastal.weatherAlert : "없음");
+  }
+
+  function environmentForOperation(operation: TheOneOperation) {
+    const env = operation.coastalEnvironment;
+    return `미세 ${env?.pmLevel ?? "-"} · 산불 ${env?.fireRiskLevel ?? "-"} · 안개 ${env?.fogLevel ?? "-"}`;
+  }
+
+  const operationWeatherRows = weatherRows.map((operation, index) => {
+    const data = operation.coastal;
+    return {
+      id: operation.id,
+      name: cleanName(operation),
+      weather: dateAdjustedWeather(operation.coastalEnvironment?.weatherStatus?.trim() || "맑음", dayOffset + index * 0.2),
+      temperature: data
+        ? `${Math.round(dateAdjustedNumber(data.temperatureC - 3, dayOffset + index * 0.2, 0.5, -30, 45))}도 ~ ${Math.round(dateAdjustedNumber(data.temperatureC + 3, dayOffset + index * 0.2, 0.6, -30, 45))}도`
+        : "-",
+      warning: warningForOperation(operation),
+      environment: environmentForOperation(operation),
+      isNorthSea: false,
+    };
+  });
+  const northSeaRows = [
+    {
+      id: "north-haeju",
+      name: "해주",
+      weather: dateAdjustedWeather("흐림", dayOffset),
+      temperature: `${Math.round(dateAdjustedNumber(12, dayOffset, 0.6, -30, 45))}도 ~ ${Math.round(dateAdjustedNumber(18, dayOffset, 0.7, -30, 45))}도`,
+      warning: "연동대기",
+      environment: "미세 보통 · 산불 낮음 · 안개 의심",
+      isNorthSea: true,
+    },
+    {
+      id: "north-nampo",
+      name: "남포",
+      weather: dateAdjustedWeather("구름많음", dayOffset + 0.5),
+      temperature: `${Math.round(dateAdjustedNumber(11, dayOffset, 0.6, -30, 45))}도 ~ ${Math.round(dateAdjustedNumber(17, dayOffset, 0.7, -30, 45))}도`,
+      warning: "연동대기",
+      environment: "미세 보통 · 산불 낮음 · 안개 발생",
+      isNorthSea: true,
+    },
+  ];
+  const regionTableRows = [...operationWeatherRows, ...northSeaRows];
   const environmentItems = [
     { label: "미세먼지", value: firstEnvironment?.pmLevel ?? "확인중" },
     { label: "산불", value: firstEnvironment?.fireRiskLevel ?? "확인중" },
     { label: "안개", value: firstEnvironment?.fogLevel ?? "확인중" },
     { label: "시정", value: `${dateAdjustedNumber(first.visibilityKm, dayOffset, 0.7, 0, 40)}km` },
-  ];
-  const northSeaItems = [
-    { label: "자료상태", value: "공식 API 미연동" },
-    { label: "연동후보", value: "GTS · 북한기상" },
-    { label: "표시방식", value: "연동 시 자동 반영" },
   ];
 
   return (
@@ -1921,38 +1961,32 @@ function OperationWeatherAnalysisSheet({ operations, alerts }: { operations: The
               ))}
             </div>
           </article>
-          <article>
-            <span>북한 해역 기상</span>
-            <div>
-              {northSeaItems.map((item) => (
-                <b key={`operation-north-${item.label}`}>
-                  <small>{item.label}</small>
-                  {item.value}
-                </b>
-              ))}
-            </div>
-          </article>
         </aside>
 
         <div className="desktop-table-scroll">
           <table className="desktop-operation-region-table">
             <thead>
               <tr>
-                <th colSpan={3}>작전지역</th>
+                <th colSpan={5}>작전지역 · 북한 해역</th>
+              </tr>
+              <tr>
+                <th>지역</th>
+                <th>개황</th>
+                <th>기온</th>
+                <th>기상특보</th>
+                <th>환경</th>
               </tr>
             </thead>
             <tbody>
-              {weatherRows.map((operation, index) => {
-                const data = operation.coastal;
-                if (!data) return null;
-                return (
-                  <tr key={`operation-weather-region-${operation.id}`}>
-                    <th>{cleanName(operation)}</th>
-                    <td>{dateAdjustedWeather(operation.coastalEnvironment?.weatherStatus?.trim() || "맑음", dayOffset + index * 0.2)}</td>
-                    <td>{Math.round(dateAdjustedNumber(data.temperatureC - 3, dayOffset + index * 0.2, 0.5, -30, 45))}도 ~ {Math.round(dateAdjustedNumber(data.temperatureC + 3, dayOffset + index * 0.2, 0.6, -30, 45))}도</td>
-                  </tr>
-                );
-              })}
+              {regionTableRows.map((row) => (
+                <tr key={`operation-weather-region-${row.id}`} className={row.isNorthSea ? "is-north-sea" : undefined}>
+                  <th>{row.name}</th>
+                  <td>{row.weather}</td>
+                  <td>{row.temperature}</td>
+                  <td>{row.warning}</td>
+                  <td>{row.environment}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

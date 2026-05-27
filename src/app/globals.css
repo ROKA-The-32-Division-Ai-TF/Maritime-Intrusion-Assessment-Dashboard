@@ -4134,14 +4134,14 @@ body:has(.desktop-app) {
 .desktop-operation-weather-grid {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(250px, 0.78fr) minmax(280px, 0.92fr) minmax(420px, 1.55fr);
+  grid-template-columns: minmax(220px, 0.58fr) minmax(460px, 1.28fr) minmax(420px, 1.32fr);
   gap: 10px;
 }
 
 .desktop-operation-weather-badges {
   min-height: 0;
   display: grid;
-  grid-template-rows: 0.8fr 1fr 0.95fr;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   align-content: stretch;
   gap: 8px;
   overflow: hidden;
@@ -4229,6 +4229,12 @@ body:has(.desktop-app) {
   background: #f0f6ff;
   color: #07111f;
   font-weight: 950;
+}
+
+.desktop-operation-region-table .is-north-sea th,
+.desktop-operation-region-table .is-north-sea td {
+  background: #f7fbff;
+  color: #153267;
 }
 
 .desktop-operation-week-table th,
