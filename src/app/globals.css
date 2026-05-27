@@ -4134,81 +4134,8 @@ body:has(.desktop-app) {
 .desktop-operation-weather-grid {
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(220px, 0.58fr) minmax(460px, 1.28fr) minmax(420px, 1.32fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(380px, 0.85fr);
   gap: 10px;
-}
-
-.desktop-operation-weather-badges {
-  min-height: 0;
-  display: grid;
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-  align-content: stretch;
-  gap: 8px;
-  overflow: hidden;
-}
-
-.desktop-operation-weather-badges article {
-  min-height: 0;
-  display: grid;
-  align-content: start;
-  gap: 5px;
-  border: 1px solid rgba(37, 74, 165, 0.16);
-  border-radius: 16px;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(37, 74, 165, 0.18), transparent 42%),
-    linear-gradient(135deg, #ffffff, #eef5ff);
-  color: var(--desktop-blue);
-  padding: 8px 10px;
-  font-weight: 950;
-  box-shadow: 0 14px 30px rgba(17, 35, 70, 0.08);
-}
-
-.desktop-operation-weather-badges span {
-  color: #62708a;
-  font-size: clamp(9px, 0.58vw, 12px);
-  font-weight: 950;
-}
-
-.desktop-operation-weather-badges strong {
-  color: #07111f;
-  font-size: clamp(10px, 0.68vw, 14px);
-  line-height: 1.18;
-  word-break: keep-all;
-}
-
-.desktop-operation-weather-badges em {
-  color: var(--desktop-blue);
-  font-size: clamp(9px, 0.58vw, 12px);
-  font-style: normal;
-  font-weight: 950;
-}
-
-.desktop-operation-weather-badges div {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 5px;
-}
-
-.desktop-operation-weather-badges b {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-  border: 1px solid rgba(37, 74, 165, 0.12);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.64);
-  color: #07111f;
-  padding: 5px 6px;
-  font-size: clamp(9px, 0.62vw, 12px);
-  line-height: 1.12;
-  white-space: normal;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.desktop-operation-weather-badges small {
-  color: #66758e;
-  font-size: clamp(8px, 0.52vw, 10px);
-  font-weight: 900;
 }
 
 .desktop-operation-region-table,
@@ -4233,7 +4160,7 @@ body:has(.desktop-app) {
 
 .desktop-operation-region-table .is-north-sea th,
 .desktop-operation-region-table .is-north-sea td {
-  background: #f7fbff;
+  background: linear-gradient(180deg, #f8fbff, #eef5ff);
   color: #153267;
 }
 
@@ -4840,9 +4767,6 @@ body:has(.desktop-app) {
     overflow: visible;
   }
 
-  .desktop-operation-weather-badges {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 820px) {
@@ -4897,7 +4821,6 @@ body:has(.desktop-app) {
     width: calc(100% - 24px);
   }
 
-  .desktop-operation-weather-badges,
   .desktop-operation-weather-grid {
     grid-template-columns: 1fr;
   }

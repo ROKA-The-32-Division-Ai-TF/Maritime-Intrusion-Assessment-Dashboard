@@ -925,7 +925,7 @@ export function DesktopCommandApp() {
             />
           )}
           {activeMenu === "weather" && <WeatherAnalysisSheet operations={selectedOperations} />}
-          {activeMenu === "operationWeather" && <OperationWeatherAnalysisSheet operations={selectedOperations} alerts={alertsForToday} />}
+          {activeMenu === "operationWeather" && <OperationWeatherAnalysisSheet operations={selectedOperations} />}
           {activeMenu === "access" && <AccessAssessmentSheet operations={selectedOperations} />}
           {activeMenu === "live" && (
             <LiveSituation
@@ -1790,14 +1790,13 @@ function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] })
   );
 }
 
-function OperationWeatherAnalysisSheet({ operations, alerts }: { operations: TheOneOperation[]; alerts: LiveAlert[] }) {
+function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] }) {
   const coastal = operations.filter((operation) => operation.type === "coastal" && operation.coastal);
   const currentDate = kstDateParts();
   const [sheetDate, setSheetDate] = useState(() => currentDate);
   const dayOffset = daysBetweenParts(currentDate, sheetDate);
   const firstOperation = coastal[0];
   const first = firstOperation?.coastal;
-  const firstEnvironment = firstOperation?.coastalEnvironment;
   const weatherRows = coastal.slice(0, 4);
   const seaColumns = coastal.slice(0, 3);
   const weekDates = Array.from({ length: 7 }, (_, index) => {
@@ -1812,20 +1811,6 @@ function OperationWeatherAnalysisSheet({ operations, alerts }: { operations: The
   const lunarDate = formatLunarDate(sheetDate.year, sheetDate.month, sheetDate.day);
   const minTemp = Math.round(dateAdjustedNumber(first.temperatureC - 4, dayOffset, 0.7, -30, 45));
   const maxTemp = Math.round(dateAdjustedNumber(first.temperatureC + 3, dayOffset, 0.8, -30, 45));
-  const alertItems = coastal
-    .flatMap((operation) => alertsForOperation(alerts, operation).map((alert) => ({ ...alert, operationName: cleanName(operation) })))
-    .filter((alert, index, array) => array.findIndex((item) => item.id === alert.id) === index);
-  const fallbackWarnings = coastal
-    .filter((operation) => operation.coastal?.weatherAlert && operation.coastal.weatherAlert !== "없음")
-    .map((operation) => `${cleanName(operation)} ${operation.coastal?.weatherAlert}`);
-  const alertSummary = alertItems.length > 0
-    ? alertItems.slice(0, 2).map((alert) => `${alert.operationName} ${alert.title}`).join(" · ")
-    : fallbackWarnings.slice(0, 2).join(" · ") || "선택지역 특보 없음";
-  function warningForOperation(operation: TheOneOperation) {
-    const matchedAlert = alertsForOperation(alerts, operation)[0];
-    return matchedAlert?.title ?? (operation.coastal?.weatherAlert && operation.coastal.weatherAlert !== "없음" ? operation.coastal.weatherAlert : "없음");
-  }
-
   function environmentForOperation(operation: TheOneOperation) {
     const env = operation.coastalEnvironment;
     return `미세 ${env?.pmLevel ?? "-"} · 산불 ${env?.fireRiskLevel ?? "-"} · 안개 ${env?.fogLevel ?? "-"}`;
@@ -1840,7 +1825,6 @@ function OperationWeatherAnalysisSheet({ operations, alerts }: { operations: The
       temperature: data
         ? `${Math.round(dateAdjustedNumber(data.temperatureC - 3, dayOffset + index * 0.2, 0.5, -30, 45))}도 ~ ${Math.round(dateAdjustedNumber(data.temperatureC + 3, dayOffset + index * 0.2, 0.6, -30, 45))}도`
         : "-",
-      warning: warningForOperation(operation),
       environment: environmentForOperation(operation),
       isNorthSea: false,
     };
@@ -1851,7 +1835,6 @@ function OperationWeatherAnalysisSheet({ operations, alerts }: { operations: The
       name: "해주",
       weather: dateAdjustedWeather("흐림", dayOffset),
       temperature: `${Math.round(dateAdjustedNumber(12, dayOffset, 0.6, -30, 45))}도 ~ ${Math.round(dateAdjustedNumber(18, dayOffset, 0.7, -30, 45))}도`,
-      warning: "연동대기",
       environment: "미세 보통 · 산불 낮음 · 안개 의심",
       isNorthSea: true,
     },
@@ -1860,18 +1843,11 @@ function OperationWeatherAnalysisSheet({ operations, alerts }: { operations: The
       name: "남포",
       weather: dateAdjustedWeather("구름많음", dayOffset + 0.5),
       temperature: `${Math.round(dateAdjustedNumber(11, dayOffset, 0.6, -30, 45))}도 ~ ${Math.round(dateAdjustedNumber(17, dayOffset, 0.7, -30, 45))}도`,
-      warning: "연동대기",
       environment: "미세 보통 · 산불 낮음 · 안개 발생",
       isNorthSea: true,
     },
   ];
   const regionTableRows = [...operationWeatherRows, ...northSeaRows];
-  const environmentItems = [
-    { label: "미세먼지", value: firstEnvironment?.pmLevel ?? "확인중" },
-    { label: "산불", value: firstEnvironment?.fireRiskLevel ?? "확인중" },
-    { label: "안개", value: firstEnvironment?.fogLevel ?? "확인중" },
-    { label: "시정", value: `${dateAdjustedNumber(first.visibilityKm, dayOffset, 0.7, 0, 40)}km` },
-  ];
 
   return (
     <section className="desktop-sheet desktop-operation-weather-sheet">
@@ -1944,36 +1920,16 @@ function OperationWeatherAnalysisSheet({ operations, alerts }: { operations: The
       </div>
 
       <div className="desktop-operation-weather-grid">
-        <aside className="desktop-operation-weather-badges">
-          <article>
-            <span>기상특보</span>
-            <strong>{alertSummary}</strong>
-            <em>{alertItems.length > 0 ? `${alertItems.length}건 확인` : "발효 정보 없음"}</em>
-          </article>
-          <article>
-            <span>미세먼지 · 산불 · 안개</span>
-            <div>
-              {environmentItems.map((item) => (
-                <b key={`operation-env-${item.label}`}>
-                  <small>{item.label}</small>
-                  {item.value}
-                </b>
-              ))}
-            </div>
-          </article>
-        </aside>
-
         <div className="desktop-table-scroll">
           <table className="desktop-operation-region-table">
             <thead>
               <tr>
-                <th colSpan={5}>작전지역 · 북한 해역</th>
+                <th colSpan={4}>작전지역 · 북한 해역</th>
               </tr>
               <tr>
                 <th>지역</th>
                 <th>개황</th>
                 <th>기온</th>
-                <th>기상특보</th>
                 <th>환경</th>
               </tr>
             </thead>
@@ -1983,7 +1939,6 @@ function OperationWeatherAnalysisSheet({ operations, alerts }: { operations: The
                   <th>{row.name}</th>
                   <td>{row.weather}</td>
                   <td>{row.temperature}</td>
-                  <td>{row.warning}</td>
                   <td>{row.environment}</td>
                 </tr>
               ))}
