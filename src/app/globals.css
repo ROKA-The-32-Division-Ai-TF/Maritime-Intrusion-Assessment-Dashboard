@@ -3896,7 +3896,8 @@ body:has(.desktop-app) {
 
 .desktop-operation-weather-sheet {
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 8px;
+  padding: 14px;
 }
 
 .desktop-assessment-sheet .desktop-sheet-head h1 {
@@ -4062,14 +4063,14 @@ body:has(.desktop-app) {
   align-items: center;
   justify-content: center;
   justify-self: center;
-  min-height: 44px;
+  min-height: 38px;
   border: 1px solid rgba(37, 74, 165, 0.14);
   border-radius: 999px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.92));
   color: #07111f;
-  padding: 0 26px;
+  padding: 0 22px;
   text-align: center;
-  font-size: clamp(17px, 1.5vw, 26px);
+  font-size: clamp(15px, 1.18vw, 22px);
   font-weight: 950;
   line-height: 1.1;
   box-shadow: 0 12px 28px rgba(17, 35, 70, 0.08);
@@ -4105,9 +4106,9 @@ body:has(.desktop-app) {
   padding: 6px 8px;
   text-align: center;
   vertical-align: middle;
-  font-size: clamp(10px, 0.72vw, 14px);
+  font-size: clamp(9px, 0.62vw, 13px);
   font-weight: 850;
-  line-height: 1.18;
+  line-height: 1.12;
   white-space: nowrap;
 }
 
@@ -4121,8 +4122,8 @@ body:has(.desktop-app) {
 
 .desktop-operation-summary-table th,
 .desktop-operation-summary-table td {
-  height: clamp(54px, 7dvh, 76px);
-  font-size: clamp(12px, 0.95vw, 18px);
+  height: clamp(42px, 5.6dvh, 62px);
+  font-size: clamp(10px, 0.78vw, 16px);
 }
 
 .desktop-operation-summary-table tbody td {
@@ -4133,39 +4134,93 @@ body:has(.desktop-app) {
 .desktop-operation-weather-grid {
   min-height: 0;
   display: grid;
-  grid-template-columns: 0.58fr 0.92fr 1.45fr;
-  gap: 12px;
+  grid-template-columns: minmax(250px, 0.78fr) minmax(280px, 0.92fr) minmax(420px, 1.55fr);
+  gap: 10px;
 }
 
 .desktop-operation-weather-badges {
   min-height: 0;
   display: grid;
+  grid-template-rows: 0.8fr 1fr 0.95fr;
   align-content: stretch;
-  gap: 12px;
+  gap: 8px;
+  overflow: hidden;
 }
 
-.desktop-operation-weather-badges strong {
+.desktop-operation-weather-badges article {
+  min-height: 0;
   display: grid;
-  place-items: center;
-  min-height: 86px;
+  align-content: start;
+  gap: 5px;
   border: 1px solid rgba(37, 74, 165, 0.16);
-  border-radius: 20px;
+  border-radius: 16px;
   background:
     radial-gradient(circle at 100% 0%, rgba(37, 74, 165, 0.18), transparent 42%),
     linear-gradient(135deg, #ffffff, #eef5ff);
   color: var(--desktop-blue);
-  padding: 14px;
-  text-align: center;
-  font-size: clamp(16px, 1.25vw, 24px);
+  padding: 8px 10px;
   font-weight: 950;
   box-shadow: 0 14px 30px rgba(17, 35, 70, 0.08);
+}
+
+.desktop-operation-weather-badges span {
+  color: #62708a;
+  font-size: clamp(9px, 0.58vw, 12px);
+  font-weight: 950;
+}
+
+.desktop-operation-weather-badges strong {
+  color: #07111f;
+  font-size: clamp(10px, 0.68vw, 14px);
+  line-height: 1.18;
+  word-break: keep-all;
+}
+
+.desktop-operation-weather-badges em {
+  color: var(--desktop-blue);
+  font-size: clamp(9px, 0.58vw, 12px);
+  font-style: normal;
+  font-weight: 950;
+}
+
+.desktop-operation-weather-badges div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.desktop-operation-weather-badges b {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  border: 1px solid rgba(37, 74, 165, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.64);
+  color: #07111f;
+  padding: 5px 6px;
+  font-size: clamp(9px, 0.62vw, 12px);
+  line-height: 1.12;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desktop-operation-weather-badges small {
+  color: #66758e;
+  font-size: clamp(8px, 0.52vw, 10px);
+  font-weight: 900;
+}
+
+.desktop-operation-region-table,
+.desktop-operation-sea-table {
+  height: 100%;
 }
 
 .desktop-operation-region-table th,
 .desktop-operation-region-table td,
 .desktop-operation-sea-table th,
 .desktop-operation-sea-table td {
-  height: clamp(36px, 5.2dvh, 54px);
+  height: clamp(30px, 4.1dvh, 44px);
 }
 
 .desktop-operation-region-table tbody th,
@@ -4178,8 +4233,8 @@ body:has(.desktop-app) {
 
 .desktop-operation-week-table th,
 .desktop-operation-week-table td {
-  height: clamp(31px, 4.1dvh, 43px);
-  font-size: clamp(9px, 0.65vw, 13px);
+  height: clamp(27px, 3.25dvh, 36px);
+  font-size: clamp(8px, 0.58vw, 12px);
 }
 
 .desktop-operation-week-table tr:first-child th {

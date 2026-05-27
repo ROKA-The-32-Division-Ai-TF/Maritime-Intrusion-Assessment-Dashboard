@@ -317,6 +317,13 @@ function formatLunarDate(year: number, month: number, day: number) {
   }
 }
 
+const KOREAN_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+function formatDateWithWeekday(parts: { year: number; month: number; day: number }) {
+  const weekday = KOREAN_WEEKDAYS[datePartsToUtcDate(parts).getUTCDay()];
+  return `${parts.year}.${String(parts.month).padStart(2, "0")}.${String(parts.day).padStart(2, "0")}(${weekday})`;
+}
+
 function splitClockPair(value?: string) {
   const matches = [...String(value ?? "").matchAll(/(\d{1,2}):(\d{2})/g)].map((match) => `${match[1].padStart(2, "0")}:${match[2]}`);
   if (matches.length >= 2) return [matches[0], matches[1]];
@@ -334,9 +341,10 @@ function dateAdjustedNumber(value: number, dayOffset: number, spread: number, mi
 }
 
 function dateAdjustedWeather(base: string, dayOffset: number) {
-  if (base !== "맑음" && Math.abs(dayOffset) % 3 !== 1) return base;
+  const offset = Math.round(dayOffset);
+  if (base !== "맑음" && Math.abs(offset) % 3 !== 1) return base;
   const sequence = ["맑음", "구름많음", "흐림", "맑음", "비"];
-  return sequence[((dayOffset % sequence.length) + sequence.length) % sequence.length];
+  return sequence[((offset % sequence.length) + sequence.length) % sequence.length];
 }
 
 function dateAdjustedAlert(base: string, dayOffset: number) {
@@ -917,7 +925,7 @@ export function DesktopCommandApp() {
             />
           )}
           {activeMenu === "weather" && <WeatherAnalysisSheet operations={selectedOperations} />}
-          {activeMenu === "operationWeather" && <OperationWeatherAnalysisSheet operations={selectedOperations} />}
+          {activeMenu === "operationWeather" && <OperationWeatherAnalysisSheet operations={selectedOperations} alerts={alertsForToday} />}
           {activeMenu === "access" && <AccessAssessmentSheet operations={selectedOperations} />}
           {activeMenu === "live" && (
             <LiveSituation
@@ -1782,14 +1790,15 @@ function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] })
   );
 }
 
-function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] }) {
+function OperationWeatherAnalysisSheet({ operations, alerts }: { operations: TheOneOperation[]; alerts: LiveAlert[] }) {
   const coastal = operations.filter((operation) => operation.type === "coastal" && operation.coastal);
   const currentDate = kstDateParts();
   const [sheetDate, setSheetDate] = useState(() => currentDate);
   const dayOffset = daysBetweenParts(currentDate, sheetDate);
   const firstOperation = coastal[0];
   const first = firstOperation?.coastal;
-  const weatherRows = coastal.slice(0, 7);
+  const firstEnvironment = firstOperation?.coastalEnvironment;
+  const weatherRows = coastal.slice(0, 6);
   const seaColumns = coastal.slice(0, 3);
   const weekDates = Array.from({ length: 7 }, (_, index) => {
     const date = datePartsToUtcDate(sheetDate);
@@ -1799,10 +1808,30 @@ function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOpera
 
   if (!first || coastal.length === 0) return <DesktopEmptySheet label="해안 지역을 선택하면 작전기상 분석표가 표시됩니다." />;
 
-  const weather = dateAdjustedWeather(firstOperation.coastalEnvironment?.weatherStatus ?? "맑음", dayOffset);
+  const weather = dateAdjustedWeather(firstOperation.coastalEnvironment?.weatherStatus?.trim() || "맑음", dayOffset);
   const lunarDate = formatLunarDate(sheetDate.year, sheetDate.month, sheetDate.day);
   const minTemp = Math.round(dateAdjustedNumber(first.temperatureC - 4, dayOffset, 0.7, -30, 45));
   const maxTemp = Math.round(dateAdjustedNumber(first.temperatureC + 3, dayOffset, 0.8, -30, 45));
+  const alertItems = coastal
+    .flatMap((operation) => alertsForOperation(alerts, operation).map((alert) => ({ ...alert, operationName: cleanName(operation) })))
+    .filter((alert, index, array) => array.findIndex((item) => item.id === alert.id) === index);
+  const fallbackWarnings = coastal
+    .filter((operation) => operation.coastal?.weatherAlert && operation.coastal.weatherAlert !== "없음")
+    .map((operation) => `${cleanName(operation)} ${operation.coastal?.weatherAlert}`);
+  const alertSummary = alertItems.length > 0
+    ? alertItems.slice(0, 2).map((alert) => `${alert.operationName} ${alert.title}`).join(" · ")
+    : fallbackWarnings.slice(0, 2).join(" · ") || "선택지역 특보 없음";
+  const environmentItems = [
+    { label: "미세먼지", value: firstEnvironment?.pmLevel ?? "확인중" },
+    { label: "산불", value: firstEnvironment?.fireRiskLevel ?? "확인중" },
+    { label: "안개", value: firstEnvironment?.fogLevel ?? "확인중" },
+    { label: "시정", value: `${dateAdjustedNumber(first.visibilityKm, dayOffset, 0.7, 0, 40)}km` },
+  ];
+  const northSeaItems = [
+    { label: "자료상태", value: "공식 API 미연동" },
+    { label: "연동후보", value: "GTS · 북한기상" },
+    { label: "표시방식", value: "연동 시 자동 반영" },
+  ];
 
   return (
     <section className="desktop-sheet desktop-operation-weather-sheet">
@@ -1839,7 +1868,7 @@ function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOpera
       </div>
 
       <div className="desktop-operation-weather-date">
-        {sheetDate.year}.{String(sheetDate.month).padStart(2, "0")}.{String(sheetDate.day).padStart(2, "0")} / 음력 {lunarDate}
+        {formatDateWithWeekday(sheetDate)} / 음력 {lunarDate}
       </div>
 
       <div className="desktop-table-scroll">
@@ -1876,9 +1905,33 @@ function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOpera
 
       <div className="desktop-operation-weather-grid">
         <aside className="desktop-operation-weather-badges">
-          <strong>기상특보</strong>
-          <strong>미세먼지 · 산불 · 안개</strong>
-          <strong>북한 해역 기상</strong>
+          <article>
+            <span>기상특보</span>
+            <strong>{alertSummary}</strong>
+            <em>{alertItems.length > 0 ? `${alertItems.length}건 확인` : "발효 정보 없음"}</em>
+          </article>
+          <article>
+            <span>미세먼지 · 산불 · 안개</span>
+            <div>
+              {environmentItems.map((item) => (
+                <b key={`operation-env-${item.label}`}>
+                  <small>{item.label}</small>
+                  {item.value}
+                </b>
+              ))}
+            </div>
+          </article>
+          <article>
+            <span>북한 해역 기상</span>
+            <div>
+              {northSeaItems.map((item) => (
+                <b key={`operation-north-${item.label}`}>
+                  <small>{item.label}</small>
+                  {item.value}
+                </b>
+              ))}
+            </div>
+          </article>
         </aside>
 
         <div className="desktop-table-scroll">
@@ -1895,7 +1948,7 @@ function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOpera
                 return (
                   <tr key={`operation-weather-region-${operation.id}`}>
                     <th>{cleanName(operation)}</th>
-                    <td>{dateAdjustedWeather(operation.coastalEnvironment?.weatherStatus ?? "맑음", dayOffset + index * 0.2)}</td>
+                    <td>{dateAdjustedWeather(operation.coastalEnvironment?.weatherStatus?.trim() || "맑음", dayOffset + index * 0.2)}</td>
                     <td>{Math.round(dateAdjustedNumber(data.temperatureC - 3, dayOffset + index * 0.2, 0.5, -30, 45))}도 ~ {Math.round(dateAdjustedNumber(data.temperatureC + 3, dayOffset + index * 0.2, 0.6, -30, 45))}도</td>
                   </tr>
                 );
@@ -1941,7 +1994,7 @@ function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOpera
             <tr>
               <th>주간기상</th>
               {weekDates.map((date) => (
-                <th key={`week-date-${date.year}-${date.month}-${date.day}`}>{String(date.month).padStart(2, "0")}.{String(date.day).padStart(2, "0")}</th>
+                <th key={`week-date-${date.year}-${date.month}-${date.day}`}>{String(date.month).padStart(2, "0")}.{String(date.day).padStart(2, "0")}({KOREAN_WEEKDAYS[datePartsToUtcDate(date).getUTCDay()]})</th>
               ))}
             </tr>
             <tr>
