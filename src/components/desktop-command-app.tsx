@@ -32,7 +32,7 @@ import {
 import { allOperations, defaultOperations, operationConfigs } from "@/lib/the-one-data";
 import type { OperationType, TheOneOperation } from "@/lib/the-one-engine";
 
-type DesktopMenu = "region" | "weather" | "access" | "live" | "weekly" | "settings";
+type DesktopMenu = "region" | "weather" | "operationWeather" | "access" | "live" | "weekly" | "settings";
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type LiveAlertLevel = "info" | "watch" | "warning";
 type LiveAlert = {
@@ -82,6 +82,7 @@ const DESKTOP_ADMIN_PIN_KEY = "baekryong-desktop-admin-pin-v1";
 const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
   { id: "region", label: "작전지역 기상", icon: MapIcon },
   { id: "weather", label: "기상분석표", icon: CalendarDays },
+  { id: "operationWeather", label: "작전기상 분석표", icon: Cloud },
   { id: "access", label: "밀입국 가능성", icon: ListChecks },
   { id: "live", label: "실시간 상황", icon: MapIcon },
   { id: "weekly", label: "주간 상황", icon: LineChart },
@@ -145,6 +146,15 @@ function alertsForOperation(alerts: LiveAlert[], operation: TheOneOperation) {
 
 function assetUrl(file: string) {
   return `${BASE_PATH}/assets/${file}`;
+}
+
+function safeLocalStorage() {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function weatherCacheUrl() {
@@ -790,10 +800,11 @@ export function DesktopCommandApp() {
 
   useEffect(() => {
     queueMicrotask(() => {
+      const storage = safeLocalStorage();
       try {
-        const storedIds = JSON.parse(window.localStorage.getItem(DESKTOP_SELECTION_KEY) ?? "null") as string[] | null;
-        const storedType = window.localStorage.getItem(DESKTOP_TYPE_KEY) as OperationType | null;
-        const storedPin = window.localStorage.getItem(DESKTOP_ADMIN_PIN_KEY);
+        const storedIds = JSON.parse(storage?.getItem(DESKTOP_SELECTION_KEY) ?? "null") as string[] | null;
+        const storedType = storage?.getItem(DESKTOP_TYPE_KEY) as OperationType | null;
+        const storedPin = storage?.getItem(DESKTOP_ADMIN_PIN_KEY);
 
         if (Array.isArray(storedIds)) {
           setSelectedIds(storedIds);
@@ -803,7 +814,7 @@ export function DesktopCommandApp() {
         if (storedType && TYPES.includes(storedType)) setActiveType(storedType);
         if (storedPin && /^\d{4}$/.test(storedPin)) setAdminPin(storedPin);
       } catch {
-        window.localStorage.removeItem(DESKTOP_SELECTION_KEY);
+        storage?.removeItem(DESKTOP_SELECTION_KEY);
       } finally {
         setLoaded(true);
       }
@@ -812,8 +823,9 @@ export function DesktopCommandApp() {
 
   useEffect(() => {
     if (!loaded) return;
-    window.localStorage.setItem(DESKTOP_SELECTION_KEY, JSON.stringify(selectedIds));
-    window.localStorage.setItem(DESKTOP_TYPE_KEY, activeType);
+    const storage = safeLocalStorage();
+    storage?.setItem(DESKTOP_SELECTION_KEY, JSON.stringify(selectedIds));
+    storage?.setItem(DESKTOP_TYPE_KEY, activeType);
   }, [activeType, loaded, selectedIds]);
 
   const selectedOperations = useMemo(
@@ -859,7 +871,7 @@ export function DesktopCommandApp() {
 
   function handleAdminPinChange(nextPin: string) {
     setAdminPin(nextPin);
-    window.localStorage.setItem(DESKTOP_ADMIN_PIN_KEY, nextPin);
+    safeLocalStorage()?.setItem(DESKTOP_ADMIN_PIN_KEY, nextPin);
   }
 
   return (
@@ -905,6 +917,7 @@ export function DesktopCommandApp() {
             />
           )}
           {activeMenu === "weather" && <WeatherAnalysisSheet operations={selectedOperations} />}
+          {activeMenu === "operationWeather" && <OperationWeatherAnalysisSheet operations={selectedOperations} />}
           {activeMenu === "access" && <AccessAssessmentSheet operations={selectedOperations} />}
           {activeMenu === "live" && (
             <LiveSituation
@@ -1762,6 +1775,193 @@ function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] })
                 })}
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] }) {
+  const coastal = operations.filter((operation) => operation.type === "coastal" && operation.coastal);
+  const currentDate = kstDateParts();
+  const [sheetDate, setSheetDate] = useState(() => currentDate);
+  const dayOffset = daysBetweenParts(currentDate, sheetDate);
+  const firstOperation = coastal[0];
+  const first = firstOperation?.coastal;
+  const weatherRows = coastal.slice(0, 7);
+  const seaColumns = coastal.slice(0, 3);
+  const weekDates = Array.from({ length: 7 }, (_, index) => {
+    const date = datePartsToUtcDate(sheetDate);
+    date.setUTCDate(date.getUTCDate() + index);
+    return kstDateParts(date);
+  });
+
+  if (!first || coastal.length === 0) return <DesktopEmptySheet label="해안 지역을 선택하면 작전기상 분석표가 표시됩니다." />;
+
+  const weather = dateAdjustedWeather(firstOperation.coastalEnvironment?.weatherStatus ?? "맑음", dayOffset);
+  const lunarDate = formatLunarDate(sheetDate.year, sheetDate.month, sheetDate.day);
+  const minTemp = Math.round(dateAdjustedNumber(first.temperatureC - 4, dayOffset, 0.7, -30, 45));
+  const maxTemp = Math.round(dateAdjustedNumber(first.temperatureC + 3, dayOffset, 0.8, -30, 45));
+
+  return (
+    <section className="desktop-sheet desktop-operation-weather-sheet">
+      <div className="desktop-sheet-head">
+        <div className="desktop-month-nav">
+          <button
+            type="button"
+            onClick={() => {
+              const previous = datePartsToUtcDate(sheetDate);
+              previous.setUTCDate(previous.getUTCDate() - 1);
+              setSheetDate(kstDateParts(previous));
+            }}
+            aria-label="이전 날짜"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <h1>작전기상 분석표</h1>
+          <button
+            type="button"
+            onClick={() => {
+              const next = datePartsToUtcDate(sheetDate);
+              next.setUTCDate(next.getUTCDate() + 1);
+              setSheetDate(kstDateParts(next));
+            }}
+            aria-label="다음 날짜"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+        <div className="desktop-sheet-actions">
+          <button type="button" onClick={() => setSheetDate(currentDate)}>오늘</button>
+          <button type="button" onClick={() => window.print()}>인쇄</button>
+        </div>
+      </div>
+
+      <div className="desktop-operation-weather-date">
+        {sheetDate.year}.{String(sheetDate.month).padStart(2, "0")}.{String(sheetDate.day).padStart(2, "0")} / 음력 {lunarDate}
+      </div>
+
+      <div className="desktop-table-scroll">
+        <table className="desktop-operation-summary-table">
+          <thead>
+            <tr>
+              <th>개황</th>
+              <th>기온<br />최저~최고</th>
+              <th>BMNT / EENT</th>
+              <th>일출 / 일몰</th>
+              <th>월출 / 월몰</th>
+              <th>월광</th>
+              <th>물때</th>
+              <th>바람</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{weather}</td>
+              <td>{minTemp} ~ {maxTemp}℃</td>
+              <td>{shiftClock(first.bmnt, dayOffset * -1)} / {shiftClock(first.eent, dayOffset)}</td>
+              <td>{shiftClock(first.sunrise, dayOffset * -1)} / {shiftClock(first.sunset, dayOffset)}</td>
+              <td>{shiftClock(first.moonrise, dayOffset * 16)} / {shiftClock(first.moonset, dayOffset * 16)}</td>
+              <td>{first.moonlightPercent}%</td>
+              <td>{dateAdjustedTideAge(first.tideAge, dayOffset)}</td>
+              <td>
+                지상풍 {first.windDirection} / {dateAdjustedNumber(first.surfaceWindMs, dayOffset, 0.6, 0, 40)}m/s<br />
+                상층풍 {first.upperWindDirection} / {dateAdjustedNumber(first.upperWindSpeedMs, dayOffset, 0.9, 0, 60)}m/s
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="desktop-operation-weather-grid">
+        <aside className="desktop-operation-weather-badges">
+          <strong>기상특보</strong>
+          <strong>미세먼지 · 산불 · 안개</strong>
+          <strong>북한 해역 기상</strong>
+        </aside>
+
+        <div className="desktop-table-scroll">
+          <table className="desktop-operation-region-table">
+            <thead>
+              <tr>
+                <th colSpan={3}>작전지역</th>
+              </tr>
+            </thead>
+            <tbody>
+              {weatherRows.map((operation, index) => {
+                const data = operation.coastal;
+                if (!data) return null;
+                return (
+                  <tr key={`operation-weather-region-${operation.id}`}>
+                    <th>{cleanName(operation)}</th>
+                    <td>{dateAdjustedWeather(operation.coastalEnvironment?.weatherStatus ?? "맑음", dayOffset + index * 0.2)}</td>
+                    <td>{Math.round(dateAdjustedNumber(data.temperatureC - 3, dayOffset + index * 0.2, 0.5, -30, 45))}도 ~ {Math.round(dateAdjustedNumber(data.temperatureC + 3, dayOffset + index * 0.2, 0.6, -30, 45))}도</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="desktop-table-scroll">
+          <table className="desktop-operation-sea-table">
+            <thead>
+              <tr>
+                <th>구분</th>
+                {seaColumns.map((operation) => (
+                  <th key={`sea-head-${operation.id}`}>{cleanName(operation)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { label: "간조", value: (data: NonNullable<TheOneOperation["coastal"]>) => shiftedClockPair(data.lowTide, dayOffset) },
+                { label: "만조", value: (data: NonNullable<TheOneOperation["coastal"]>) => shiftedClockPair(data.highTide, dayOffset) },
+                { label: "파고원해", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.offshoreWaveHeightM, dayOffset, 0.22, 0, 7)}m` },
+                { label: "파고내해", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.nearshoreWaveHeightM, dayOffset, 0.16, 0, 5)}m` },
+                { label: "수온", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.waterTempC, dayOffset, 0.25, -3, 35)}℃` },
+                { label: "시정", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.visibilityKm, dayOffset, 0.7, 0, 40)}km` },
+              ].map((row) => (
+                <tr key={`operation-weather-sea-${row.label}`}>
+                  <th>{row.label}</th>
+                  {seaColumns.map((operation) => (
+                    <td key={`${row.label}-${operation.id}`}>{operation.coastal ? row.value(operation.coastal) : "-"}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="desktop-table-scroll">
+        <table className="desktop-operation-week-table">
+          <tbody>
+            <tr>
+              <th>주간기상</th>
+              {weekDates.map((date) => (
+                <th key={`week-date-${date.year}-${date.month}-${date.day}`}>{String(date.month).padStart(2, "0")}.{String(date.day).padStart(2, "0")}</th>
+              ))}
+            </tr>
+            <tr>
+              <th>개황</th>
+              {weekDates.map((date, index) => (
+                <td key={`week-weather-${date.day}`}>{dateAdjustedWeather(weather, dayOffset + index)}</td>
+              ))}
+            </tr>
+            <tr>
+              <th>상층풍</th>
+              {weekDates.map((date, index) => (
+                <td key={`week-wind-${date.day}`}>{first.upperWindDirection} / {dateAdjustedNumber(first.upperWindSpeedMs, dayOffset + index, 0.9, 0, 60)}m/s</td>
+              ))}
+            </tr>
+            <tr>
+              <th>월광</th>
+              {weekDates.map((date, index) => (
+                <td key={`week-moon-${date.day}`}>{Math.max(0, Math.min(100, first.moonlightPercent + index * 4))}%</td>
+              ))}
+            </tr>
           </tbody>
         </table>
       </div>
