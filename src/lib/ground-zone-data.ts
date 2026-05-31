@@ -1,7 +1,52 @@
-import type { LandZoneData } from "./ground-risk";
-
 export type GroundRegionGroupKey = "capital" | "gangwon" | "chungcheong" | "honam" | "yeongnam" | "jeju";
 export type GroundTerrainType = "산악" | "도심" | "평야" | "해안 인접";
+export type LandDustLevel = "매우나쁨" | "나쁨" | "보통" | "좋음";
+export type LandWeatherStatus = "맑음" | "흐림" | "비" | "눈" | "안개" | "강풍" | "뇌우";
+export type LandFogLevel = "심함" | "발생" | "의심" | "없음";
+export type LandUvLevel = "위험" | "매우높음" | "높음" | "보통" | "낮음";
+export type LandLightningRisk = "없음" | "낮음" | "주의" | "가능" | "발생";
+export type LandIcingRisk = "없음" | "낮음" | "주의" | "높음";
+export type LandPressureTrend = "급하강" | "하강" | "유지" | "상승";
+export type LandFireRiskLevel = "매우높음" | "높음" | "보통" | "낮음";
+export type LandAlertLevel =
+  | "없음"
+  | "폭염주의보"
+  | "폭염경보"
+  | "한파주의보"
+  | "한파경보"
+  | "호우주의보"
+  | "호우경보"
+  | "대설주의보"
+  | "대설경보"
+  | "강풍주의보"
+  | "강풍경보"
+  | "건조주의보"
+  | "안개주의보";
+
+export type LandZoneData = {
+  temperatureC: number;
+  humidityPercent: number;
+  apparentTemperatureC?: number;
+  wbgtC?: number;
+  precipitationMm: number;
+  precipitationProbability: number;
+  windSpeedMs: number;
+  windDirection: string;
+  visibilityKm: number;
+  weatherStatus: LandWeatherStatus;
+  fogLevel: LandFogLevel;
+  pm10Level: LandDustLevel;
+  pm25Level: LandDustLevel;
+  ozoneLevel: LandDustLevel;
+  fireRiskLevel: LandFireRiskLevel;
+  weatherAlert: LandAlertLevel;
+  pressureHpa: number;
+  pressureTrend: LandPressureTrend;
+  uvIndexLevel: LandUvLevel;
+  lightningRisk: LandLightningRisk;
+  snowDepthCm: number;
+  icingRisk: LandIcingRisk;
+};
 
 export type GroundZone = {
   id: string;
@@ -310,6 +355,7 @@ const nationalGroundSeeds: GroundCitySeed[] = [
   { id: "land-gwangju", label: "광주", name: "광주광역시 기상 권역", sector: "호남 · 내륙 도심", regionGroup: "honam", terrain: "도심", center: [35.159, 126.852], temperatureC: 30, humidityPercent: 66, precipitationProbability: 38, windSpeedMs: 3.0, visibilityKm: 7.0 },
   { id: "land-ulsan", label: "울산", name: "울산광역시 기상 권역", sector: "영남 · 동해안", regionGroup: "yeongnam", terrain: "해안 인접", center: [35.538, 129.311], temperatureC: 26, humidityPercent: 72, precipitationProbability: 42, windSpeedMs: 5.6, visibilityKm: 6.4 },
   { id: "land-sejong", label: "세종", name: "세종특별자치시 기상 권역", sector: "충청 · 내륙", regionGroup: "chungcheong", terrain: "평야", center: [36.48, 127.289], temperatureC: 28, humidityPercent: 60, precipitationProbability: 28, windSpeedMs: 2.8, visibilityKm: 8.0 },
+  { id: "land-gyeryong", label: "계룡", name: "충청남도 계룡시 기상 권역", sector: "충청 · 계룡 내륙", regionGroup: "chungcheong", terrain: "평야", center: [36.274, 127.249], temperatureC: 27, humidityPercent: 63, precipitationProbability: 30, windSpeedMs: 3.1, visibilityKm: 7.6 },
   { id: "land-suwon", label: "수원", name: "경기도 수원시 기상 권역", sector: "수도권 · 남부 도심", regionGroup: "capital", terrain: "도심", center: [37.263, 127.028], temperatureC: 28, humidityPercent: 63, precipitationProbability: 32, windSpeedMs: 3.4, visibilityKm: 7.6 },
   { id: "land-chuncheon", label: "춘천", name: "강원도 춘천시 기상 권역", sector: "강원 · 내륙 산악", regionGroup: "gangwon", terrain: "산악", center: [37.881, 127.729], temperatureC: 26, humidityPercent: 68, precipitationProbability: 45, windSpeedMs: 3.8, visibilityKm: 6.2 },
   { id: "land-cheongju", label: "청주", name: "충청북도 청주시 기상 권역", sector: "충청 · 내륙 도심", regionGroup: "chungcheong", terrain: "도심", center: [36.642, 127.489], temperatureC: 29, humidityPercent: 61, precipitationProbability: 34, windSpeedMs: 3.1, visibilityKm: 7.7 },

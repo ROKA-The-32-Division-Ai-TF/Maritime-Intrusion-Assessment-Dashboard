@@ -1,5 +1,5 @@
 import type { AviationZoneData } from "@/lib/aviation-zone-data";
-import type { LandZoneData } from "@/lib/ground-risk";
+import type { LandZoneData } from "@/lib/ground-zone-data";
 import type { ZoneEnvironmentData } from "@/lib/zone-data";
 
 export type OperationType = "coastal" | "ground" | "air";

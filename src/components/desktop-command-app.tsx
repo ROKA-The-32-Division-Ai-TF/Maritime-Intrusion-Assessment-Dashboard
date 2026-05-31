@@ -30,7 +30,7 @@ import {
   Wind,
 } from "lucide-react";
 import { allOperations, defaultOperations, operationConfigs } from "@/lib/the-one-data";
-import type { OperationType, TheOneOperation } from "@/lib/the-one-engine";
+import type { CoastalData, OperationType, TheOneOperation } from "@/lib/the-one-engine";
 
 type DesktopMenu = "region" | "weather" | "operationWeather" | "access" | "live" | "weekly" | "settings";
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
@@ -73,17 +73,23 @@ type DesktopMetric = {
   helper: string;
   icon: IconType;
 };
+type OffshorePointInput = {
+  name: string;
+  latitude: number;
+  longitude: number;
+};
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const VWORLD_API_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY ?? "";
 const DESKTOP_SELECTION_KEY = "baekryong-desktop-selection-v1";
 const DESKTOP_TYPE_KEY = "baekryong-desktop-type-v1";
 const DESKTOP_ADMIN_PIN_KEY = "baekryong-desktop-admin-pin-v1";
+const DESKTOP_CUSTOM_OFFSHORE_KEY = "baekryong-desktop-custom-offshore-v1";
 const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
   { id: "region", label: "작전지역 기상", icon: MapIcon },
   { id: "weather", label: "기상분석표", icon: CalendarDays },
   { id: "operationWeather", label: "작전기상 분석표", icon: Cloud },
-  { id: "access", label: "밀입국 가능성", icon: ListChecks },
+  { id: "access", label: "해상위협 판단지원", icon: ListChecks },
   { id: "live", label: "실시간 상황", icon: MapIcon },
   { id: "weekly", label: "주간 상황", icon: LineChart },
   { id: "settings", label: "관리자 설정", icon: Settings },
@@ -91,8 +97,7 @@ const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
 const TYPES: OperationType[] = ["coastal", "ground", "air"];
 const MAP_ZOOM_MIN = 4;
 const MAP_ZOOM_MAX = 11;
-const DESKTOP_HOURLY_LABELS = ["현재", "+2h", "+4h", "+6h", "+8h", "+10h", "+12h", "+14h", "+16h", "+18h", "+20h", "+22h", "+24h"];
-const DESKTOP_HOURLY_DELTAS = [-0.55, -0.38, -0.2, 0, 0.25, 0.48, 0.58, 0.4, 0.15, -0.1, -0.32, -0.5, -0.62];
+const DESKTOP_HOURLY_STEPS = Array.from({ length: 24 }, (_, index) => index + 1);
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -171,11 +176,46 @@ function cleanName(operation: TheOneOperation) {
   return operation.name.replace(/^.*?·\s*/, "").replace(/\s*(일대|권역|관측권|기상 권역)$/g, "");
 }
 
+function operationMatchesKeywords(operation: TheOneOperation, keywords: string[]) {
+  const text = `${operation.id} ${operation.name} ${operation.area}`;
+  return keywords.some((keyword) => text.includes(keyword));
+}
+
+function findOperationByKeywords(
+  operations: TheOneOperation[],
+  type: OperationType,
+  keywords: string[],
+) {
+  return operations.find((operation) => operation.type === type && operationMatchesKeywords(operation, keywords))
+    ?? allOperations.find((operation) => operation.type === type && operationMatchesKeywords(operation, keywords));
+}
+
+function findAnyOperationByKeywords(operations: TheOneOperation[], keywords: string[]) {
+  return operations.find((operation) => operationMatchesKeywords(operation, keywords))
+    ?? allOperations.find((operation) => operationMatchesKeywords(operation, keywords));
+}
+
 const REGION_KEYWORDS = [
   "서산", "당진", "태안", "보령", "대전", "세종", "서울", "인천", "김포", "수원", "파주", "용인",
   "철원", "춘천", "원주", "강릉", "속초", "양양", "태백", "청주", "충주", "공주", "천안", "아산",
   "군산", "전주", "광주", "무안", "여수", "목포", "대구", "부산", "김해", "울산", "포항", "사천",
   "제주", "서귀포", "성산", "백령", "대련", "위해", "동중국해", "동해",
+];
+const WEATHER_ANALYSIS_REGION_ORDER = [
+  { label: "서천", keywords: ["서천", "장항", "홍원", "마량"] },
+  { label: "보령", keywords: ["보령", "대천"] },
+  { label: "태안", keywords: ["태안", "안흥", "만리포", "꽃지"] },
+  { label: "서산", keywords: ["서산", "대산"] },
+  { label: "당진", keywords: ["당진", "장고항"] },
+];
+const OPERATION_WEATHER_REGION_ORDER = [
+  { label: "당진", keywords: ["당진", "장고항"] },
+  { label: "서산", keywords: ["서산", "대산"] },
+  { label: "태안", keywords: ["태안", "안흥", "만리포", "꽃지"] },
+  { label: "보령", keywords: ["보령", "대천"] },
+  { label: "서천", keywords: ["서천", "장항", "홍원", "마량"] },
+  { label: "세종", keywords: ["세종"] },
+  { label: "계룡", keywords: ["계룡"] },
 ];
 
 function displayRegionName(operation: TheOneOperation) {
@@ -287,6 +327,15 @@ function kstDateParts(date = new Date()) {
     month: kstDate.getUTCMonth() + 1,
     day: kstDate.getUTCDate(),
   };
+}
+
+function kstHour(date = new Date()) {
+  return new Date(date.getTime() + 9 * 60 * 60 * 1000).getUTCHours();
+}
+
+function desktopHourlyLabels(date = new Date()) {
+  const currentHour = kstHour(date);
+  return DESKTOP_HOURLY_STEPS.map((step) => `${String((currentHour + step) % 24).padStart(2, "0")}시`);
 }
 
 function daysInMonth(year: number, month: number) {
@@ -440,8 +489,10 @@ function desktopHourlyValues(metric: DesktopMetric, metricIndex: number) {
   const floor = ["%", "km", "m", "m/s", "kt", "mm", "초", "ft"].some((candidate) => unit.includes(candidate)) ? 0 : numeric - spread * 1.8;
   const ceiling = unit.includes("%") ? 100 : Math.max(numeric + spread * 1.8, numeric + 1);
 
-  return DESKTOP_HOURLY_DELTAS.map((delta, index) => {
-    const dayCycle = Math.sin((index / Math.max(1, DESKTOP_HOURLY_DELTAS.length - 1)) * Math.PI * 1.5) * spread * 0.18;
+  return DESKTOP_HOURLY_STEPS.map((step, index) => {
+    const phase = index / Math.max(1, DESKTOP_HOURLY_STEPS.length - 1);
+    const delta = Math.sin((phase * Math.PI * 2) - Math.PI / 3) * 0.5 + Math.cos(step / 4) * 0.22;
+    const dayCycle = Math.sin(phase * Math.PI * 1.5) * spread * 0.18;
     return Number(Math.max(floor, Math.min(ceiling, numeric + delta * spread + dayCycle)).toFixed(1));
   });
 }
@@ -617,6 +668,54 @@ function windyPageUrl(operation: TheOneOperation) {
   const [lat, lon] = operation.center ?? [36.5, 126.5];
   const zoom = operation.type === "coastal" ? "7" : operation.type === "ground" ? "9" : "8";
   return `https://www.windy.com/?${lat},${lon},${zoom}`;
+}
+
+function clampCoordinate(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return null;
+  return Math.min(max, Math.max(min, value));
+}
+
+function createCustomOffshoreOperation(input: OffshorePointInput): TheOneOperation {
+  const latitude = clampCoordinate(input.latitude, -90, 90);
+  const longitude = clampCoordinate(input.longitude, -180, 180);
+  if (latitude === null || longitude === null) {
+    throw new Error("위도와 경도를 숫자로 입력해 주세요.");
+  }
+
+  const seed = allOperations.find((operation) => operation.type === "coastal" && operation.area.includes("원해"))
+    ?? allOperations.find((operation) => operation.type === "coastal");
+  if (!seed?.coastal || !seed.coastalEnvironment) throw new Error("원해 기준 관측점이 없습니다.");
+
+  const operation = structuredClone(seed);
+  const coordinateFactor = Math.abs(Math.sin((latitude * 1.37 + longitude * 0.91) * Math.PI / 180));
+  const waveBump = Number((0.25 + coordinateFactor * 0.55).toFixed(1));
+  const windBump = Number((0.5 + coordinateFactor * 1.4).toFixed(1));
+  const visibilityDrop = Number((coordinateFactor * 1.6).toFixed(1));
+  const name = input.name.trim() || `원해 좌표 ${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
+
+  operation.id = `coastal-custom-offshore-${Date.now()}-${Math.round(Math.abs(latitude * 1000 + longitude * 1000))}`;
+  operation.name = name;
+  operation.area = `사용자 지정 원해 · ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+  operation.datetime = "사용자 지정 원해 좌표";
+  operation.center = [latitude, longitude];
+  operation.imageTone = "blue";
+  const coastal = operation.coastal;
+  const environment = operation.coastalEnvironment;
+  if (!coastal || !environment) return operation;
+
+  coastal.waveHeightM = Number((seed.coastal.waveHeightM + waveBump).toFixed(1));
+  coastal.nearshoreWaveHeightM = coastal.waveHeightM;
+  coastal.offshoreWaveHeightM = Number((coastal.waveHeightM + 0.5).toFixed(1));
+  coastal.windSpeedMs = Number((seed.coastal.windSpeedMs + windBump).toFixed(1));
+  coastal.surfaceWindMs = coastal.windSpeedMs;
+  coastal.upperWindSpeedMs = Number((coastal.windSpeedMs * 1.45 + 1.8).toFixed(1));
+  coastal.visibilityKm = Number(Math.max(0.5, seed.coastal.visibilityKm - visibilityDrop).toFixed(1));
+  coastal.weatherAlert = coastal.waveHeightM >= 2 || coastal.windSpeedMs >= 12 ? "풍랑/강풍 확인" : "없음";
+  environment.waveHeightM = coastal.waveHeightM;
+  environment.windSpeedMs = coastal.windSpeedMs;
+  environment.visibilityKm = coastal.visibilityKm;
+
+  return operation;
 }
 
 function desktopMetrics(operation: TheOneOperation): DesktopMetric[] {
@@ -805,6 +904,7 @@ export function DesktopCommandApp() {
   const [adminPin, setAdminPin] = useState("0000");
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [customOffshoreOperations, setCustomOffshoreOperations] = useState<TheOneOperation[]>([]);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -813,6 +913,7 @@ export function DesktopCommandApp() {
         const storedIds = JSON.parse(storage?.getItem(DESKTOP_SELECTION_KEY) ?? "null") as string[] | null;
         const storedType = storage?.getItem(DESKTOP_TYPE_KEY) as OperationType | null;
         const storedPin = storage?.getItem(DESKTOP_ADMIN_PIN_KEY);
+        const storedOffshore = JSON.parse(storage?.getItem(DESKTOP_CUSTOM_OFFSHORE_KEY) ?? "[]") as TheOneOperation[];
 
         if (Array.isArray(storedIds)) {
           setSelectedIds(storedIds);
@@ -821,8 +922,12 @@ export function DesktopCommandApp() {
 
         if (storedType && TYPES.includes(storedType)) setActiveType(storedType);
         if (storedPin && /^\d{4}$/.test(storedPin)) setAdminPin(storedPin);
+        if (Array.isArray(storedOffshore)) {
+          setCustomOffshoreOperations(storedOffshore.filter((operation) => operation?.type === "coastal" && operation.id?.startsWith("coastal-custom-offshore-")));
+        }
       } catch {
         storage?.removeItem(DESKTOP_SELECTION_KEY);
+        storage?.removeItem(DESKTOP_CUSTOM_OFFSHORE_KEY);
       } finally {
         setLoaded(true);
       }
@@ -836,9 +941,18 @@ export function DesktopCommandApp() {
     storage?.setItem(DESKTOP_TYPE_KEY, activeType);
   }, [activeType, loaded, selectedIds]);
 
+  useEffect(() => {
+    if (!loaded) return;
+    safeLocalStorage()?.setItem(DESKTOP_CUSTOM_OFFSHORE_KEY, JSON.stringify(customOffshoreOperations));
+  }, [customOffshoreOperations, loaded]);
+
+  const fullCatalog = useMemo(
+    () => [...catalog, ...customOffshoreOperations],
+    [catalog, customOffshoreOperations],
+  );
   const selectedOperations = useMemo(
-    () => catalog.filter((operation) => selectedIds.includes(operation.id)),
-    [catalog, selectedIds],
+    () => fullCatalog.filter((operation) => selectedIds.includes(operation.id)),
+    [fullCatalog, selectedIds],
   );
   const activeOperations = useMemo(
     () => selectedOperations.filter((operation) => operation.type === activeType),
@@ -852,7 +966,7 @@ export function DesktopCommandApp() {
   );
 
   function handleTypeChange(type: OperationType) {
-    const first = selectedOperations.find((operation) => operation.type === type) ?? catalog.find((operation) => operation.type === type);
+    const first = selectedOperations.find((operation) => operation.type === type) ?? fullCatalog.find((operation) => operation.type === type);
     setActiveType(type);
     setSelectedId(first?.id ?? "");
   }
@@ -871,7 +985,7 @@ export function DesktopCommandApp() {
 
   function handleHome() {
     const firstCoastal = selectedOperations.find((operation) => operation.type === "coastal")
-      ?? catalog.find((operation) => operation.type === "coastal");
+      ?? fullCatalog.find((operation) => operation.type === "coastal");
     setActiveMenu("region");
     setActiveType("coastal");
     setSelectedId(firstCoastal?.id ?? "");
@@ -880,6 +994,24 @@ export function DesktopCommandApp() {
   function handleAdminPinChange(nextPin: string) {
     setAdminPin(nextPin);
     safeLocalStorage()?.setItem(DESKTOP_ADMIN_PIN_KEY, nextPin);
+  }
+
+  function handleAddOffshorePoint(input: OffshorePointInput) {
+    const operation = createCustomOffshoreOperation(input);
+    setCustomOffshoreOperations((current) => [...current, operation]);
+    setSelectedIds((current) => [...new Set([...current, operation.id])]);
+    setActiveType("coastal");
+    setSelectedId(operation.id);
+  }
+
+  function handleRemoveCustomOffshorePoint(id: string) {
+    setCustomOffshoreOperations((current) => current.filter((operation) => operation.id !== id));
+    setSelectedIds((current) => current.filter((operationId) => operationId !== id));
+    if (selectedId === id) {
+      const fallback = selectedOperations.find((operation) => operation.id !== id && operation.type === "coastal")
+        ?? fullCatalog.find((operation) => operation.id !== id && operation.type === "coastal");
+      setSelectedId(fallback?.id ?? "");
+    }
   }
 
   return (
@@ -926,7 +1058,7 @@ export function DesktopCommandApp() {
           )}
           {activeMenu === "weather" && <WeatherAnalysisSheet operations={selectedOperations} />}
           {activeMenu === "operationWeather" && <OperationWeatherAnalysisSheet operations={selectedOperations} />}
-          {activeMenu === "access" && <AccessAssessmentSheet operations={selectedOperations} />}
+          {activeMenu === "access" && <AccessAssessmentSheet operations={selectedOperations} alerts={alertsForToday} />}
           {activeMenu === "live" && (
             <LiveSituation
               activeType={activeType}
@@ -949,10 +1081,11 @@ export function DesktopCommandApp() {
           {activeMenu === "settings" && (
             adminUnlocked ? (
               <DesktopSettings
-                catalog={catalog}
+                catalog={fullCatalog}
                 selectedIds={selectedIds}
                 activeType={activeType}
                 adminPin={adminPin}
+                customOffshoreOperations={customOffshoreOperations}
                 onTypeChange={setActiveType}
                 onToggle={handleToggle}
                 onClear={() => {
@@ -962,11 +1095,13 @@ export function DesktopCommandApp() {
                 }}
                 onDefault={handleDefault}
                 onSelectAllType={() => {
-                  const ids = catalog.filter((operation) => operation.type === activeType).map((operation) => operation.id);
+                  const ids = fullCatalog.filter((operation) => operation.type === activeType).map((operation) => operation.id);
                   setSelectedIds((current) => [...new Set([...current, ...ids])]);
                   setSelectedId(ids[0] ?? "");
                 }}
                 onChangePin={handleAdminPinChange}
+                onAddOffshorePoint={handleAddOffshorePoint}
+                onRemoveCustomOffshorePoint={handleRemoveCustomOffshorePoint}
                 onLock={() => setAdminUnlocked(false)}
               />
             ) : (
@@ -1503,6 +1638,7 @@ function LiveSituation({
 function DesktopHourlyMetricPanel({ metric, index }: { metric: DesktopMetric; index: number }) {
   const values = desktopHourlyValues(metric, index);
   const unit = metricUnit(metric.value);
+  const labels = desktopHourlyLabels();
   const clocks = [...metric.value.matchAll(/(\d{1,2}):(\d{2})/g)].map((match) => `${match[1].padStart(2, "0")}:${match[2]}`);
 
   if (values.length === 0) {
@@ -1544,7 +1680,7 @@ function DesktopHourlyMetricPanel({ metric, index }: { metric: DesktopMetric; in
           <path className="desktop-hourly-area" d={areaPath} />
           <polyline className="desktop-hourly-line" points={path} />
           {points.map((point, pointIndex) => (
-            <g key={`${metric.label}-${DESKTOP_HOURLY_LABELS[pointIndex]}`}>
+            <g key={`${metric.label}-${labels[pointIndex]}`}>
               <circle cx={point.x} cy={point.y} r="4" />
               {pointIndex % 3 === 0 && <text x={point.x} y={Math.max(14, point.y - 8)}>{displayMetricValue(point.value, unit)}</text>}
             </g>
@@ -1553,8 +1689,8 @@ function DesktopHourlyMetricPanel({ metric, index }: { metric: DesktopMetric; in
       </div>
       <div className="desktop-hourly-value-strip">
         {values.map((value, valueIndex) => (
-          <span key={`${metric.label}-${DESKTOP_HOURLY_LABELS[valueIndex]}`}>
-            <em>{DESKTOP_HOURLY_LABELS[valueIndex]}</em>
+          <span key={`${metric.label}-${labels[valueIndex]}`}>
+            <em>{labels[valueIndex]}</em>
             <b>{displayMetricValue(value, unit)}</b>
           </span>
         ))}
@@ -1715,7 +1851,13 @@ function WeeklyMetricCard({ metric, index }: { metric: DesktopMetric; index: num
 }
 
 function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] }) {
-  const coastal = operations.filter((operation) => operation.type === "coastal" && operation.coastal).slice(0, 6);
+  const coastalRows = WEATHER_ANALYSIS_REGION_ORDER
+    .map((region) => ({
+      label: region.label,
+      operation: findOperationByKeywords(operations, "coastal", region.keywords),
+    }))
+    .filter((row): row is { label: string; operation: TheOneOperation } => Boolean(row.operation?.coastal));
+  const coastal = coastalRows.map((row) => row.operation);
   const first = coastal[0]?.coastal;
   const currentMonth = kstDateParts();
   const [sheetMonth, setSheetMonth] = useState(() => ({ year: currentMonth.year, month: currentMonth.month }));
@@ -1725,7 +1867,7 @@ function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] })
   if (!first || coastal.length === 0) return <DesktopEmptySheet label="해안 지역을 선택하면 기상분석표가 표시됩니다." />;
 
   return (
-    <section className="desktop-sheet">
+    <section className="desktop-sheet desktop-analysis-sheet">
       <div className="desktop-sheet-head">
         <div className="desktop-month-nav">
           <button type="button" onClick={() => setSheetMonth((current) => addMonth(current.year, current.month, -1))} aria-label="이전 달">
@@ -1752,14 +1894,14 @@ function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] })
               <th rowSpan={2}>월출<br />월몰</th>
               <th rowSpan={2}>월광</th>
               <th rowSpan={2}>물때</th>
-              {coastal.map((operation) => (
-                <th key={operation.id} colSpan={2}>{cleanName(operation)}</th>
+              {coastalRows.map((row) => (
+                <th key={row.operation.id} colSpan={2}>{row.label}</th>
               ))}
             </tr>
             <tr>
-              {coastal.flatMap((operation) => [
-                <th key={`${operation.id}-high`}>만조</th>,
-                <th key={`${operation.id}-low`}>간조</th>,
+              {coastalRows.flatMap((row) => [
+                <th key={`${row.operation.id}-high`}>만조</th>,
+                <th key={`${row.operation.id}-low`}>간조</th>,
               ])}
             </tr>
           </thead>
@@ -1773,7 +1915,8 @@ function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] })
                 <td>{shiftClock(first.moonrise, (day - 1) * 16)}<br />{shiftClock(first.moonset, (day - 1) * 16)}</td>
                 <td>{Math.max(0, Math.min(100, first.moonlightPercent + (day - 1) * 3))}%</td>
                 <td>{`${((Number.parseInt(first.tideAge, 10) || 7) + day - 2) % 15 + 1}물`}</td>
-                {coastal.flatMap((operation) => {
+                {coastalRows.flatMap((row) => {
+                  const operation = row.operation;
                   const high = splitClockPair(operation.coastal?.highTide);
                   const low = splitClockPair(operation.coastal?.lowTide);
                   return [
@@ -1791,14 +1934,33 @@ function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] })
 }
 
 function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] }) {
-  const coastal = operations.filter((operation) => operation.type === "coastal" && operation.coastal);
+  const coastal = WEATHER_ANALYSIS_REGION_ORDER
+    .map((region) => findOperationByKeywords(operations, "coastal", region.keywords))
+    .filter((operation): operation is TheOneOperation => Boolean(operation?.coastal));
+  const operationRegionRows = OPERATION_WEATHER_REGION_ORDER
+    .map((region) => ({
+      label: region.label,
+      operation: findAnyOperationByKeywords(operations, region.keywords),
+    }))
+    .filter((row): row is { label: string; operation: TheOneOperation } => Boolean(row.operation));
+  const operationSeaColumns = [
+    { label: "당진", keywords: ["당진", "장고항"] },
+    { label: "태안", keywords: ["태안", "안흥", "만리포", "꽃지"] },
+    { label: "보령", keywords: ["보령", "대천"] },
+  ]
+    .map((region) => ({
+      label: region.label,
+      operation: findOperationByKeywords(operations, "coastal", region.keywords),
+    }))
+    .filter((row): row is { label: string; operation: TheOneOperation } => Boolean(row.operation?.coastal));
   const currentDate = kstDateParts();
   const [sheetDate, setSheetDate] = useState(() => currentDate);
+  const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null);
   const dayOffset = daysBetweenParts(currentDate, sheetDate);
-  const firstOperation = coastal[0];
+  const firstOperation = operationSeaColumns[0]?.operation ?? coastal[0];
   const first = firstOperation?.coastal;
-  const weatherRows = coastal.slice(0, 4);
-  const seaColumns = coastal.slice(0, 3);
+  const weatherRows = operationRegionRows;
+  const seaColumns = operationSeaColumns;
   const weekDates = Array.from({ length: 7 }, (_, index) => {
     const date = datePartsToUtcDate(sheetDate);
     date.setUTCDate(date.getUTCDate() + index);
@@ -1811,22 +1973,22 @@ function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOpera
   const lunarDate = formatLunarDate(sheetDate.year, sheetDate.month, sheetDate.day);
   const minTemp = Math.round(dateAdjustedNumber(first.temperatureC - 4, dayOffset, 0.7, -30, 45));
   const maxTemp = Math.round(dateAdjustedNumber(first.temperatureC + 3, dayOffset, 0.8, -30, 45));
-  function environmentForOperation(operation: TheOneOperation) {
-    const env = operation.coastalEnvironment;
-    return `미세 ${env?.pmLevel ?? "-"} · 산불 ${env?.fireRiskLevel ?? "-"} · 안개 ${env?.fogLevel ?? "-"}`;
-  }
+  const operationWeatherRows = weatherRows.map((row, index) => {
+    const operation = row.operation;
+    const coastalData = operation.coastal;
+    const groundData = operation.ground;
+    const airData = operation.air;
+    const baseTemperature = coastalData?.temperatureC ?? groundData?.temperatureC ?? airData?.temperatureC ?? 0;
+    const weatherStatus = operation.coastalEnvironment?.weatherStatus
+      ?? operation.groundEnvironment?.weatherStatus
+      ?? operation.aviationEnvironment?.weatherStatus
+      ?? "맑음";
 
-  const operationWeatherRows = weatherRows.map((operation, index) => {
-    const data = operation.coastal;
     return {
       id: operation.id,
-      name: cleanName(operation),
-      weather: dateAdjustedWeather(operation.coastalEnvironment?.weatherStatus?.trim() || "맑음", dayOffset + index * 0.2),
-      temperature: data
-        ? `${Math.round(dateAdjustedNumber(data.temperatureC - 3, dayOffset + index * 0.2, 0.5, -30, 45))}도 ~ ${Math.round(dateAdjustedNumber(data.temperatureC + 3, dayOffset + index * 0.2, 0.6, -30, 45))}도`
-        : "-",
-      environment: environmentForOperation(operation),
-      isNorthSea: false,
+      name: row.label,
+      weather: dateAdjustedWeather(weatherStatus.trim() || "맑음", dayOffset + index * 0.2),
+      temperature: `${Math.round(dateAdjustedNumber(baseTemperature - 3, dayOffset + index * 0.2, 0.5, -30, 45))}도 ~ ${Math.round(dateAdjustedNumber(baseTemperature + 3, dayOffset + index * 0.2, 0.6, -30, 45))}도`,
     };
   });
   const northSeaRows = [
@@ -1836,7 +1998,6 @@ function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOpera
       weather: dateAdjustedWeather("흐림", dayOffset),
       temperature: `${Math.round(dateAdjustedNumber(12, dayOffset, 0.6, -30, 45))}도 ~ ${Math.round(dateAdjustedNumber(18, dayOffset, 0.7, -30, 45))}도`,
       environment: "미세 보통 · 산불 낮음 · 안개 의심",
-      isNorthSea: true,
     },
     {
       id: "north-nampo",
@@ -1844,10 +2005,106 @@ function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOpera
       weather: dateAdjustedWeather("구름많음", dayOffset + 0.5),
       temperature: `${Math.round(dateAdjustedNumber(11, dayOffset, 0.6, -30, 45))}도 ~ ${Math.round(dateAdjustedNumber(17, dayOffset, 0.7, -30, 45))}도`,
       environment: "미세 보통 · 산불 낮음 · 안개 발생",
-      isNorthSea: true,
     },
   ];
   const regionTableRows = operationWeatherRows;
+  function environmentSnapshot(operation: TheOneOperation) {
+    if (operation.coastalEnvironment) {
+      const env = operation.coastalEnvironment;
+      return {
+        pm: env.pmLevel,
+        fire: env.fireRiskLevel,
+        fog: env.fogLevel,
+      };
+    }
+
+    if (operation.groundEnvironment) {
+      const env = operation.groundEnvironment;
+      return {
+        pm: `${env.pm10Level}/${env.pm25Level}`,
+        fire: env.fireRiskLevel,
+        fog: env.fogLevel,
+      };
+    }
+
+    if (operation.aviationEnvironment) {
+      const env = operation.aviationEnvironment;
+      return {
+        pm: "확인",
+        fire: "확인",
+        fog: env.fogLevel,
+      };
+    }
+
+    return {
+      pm: "확인",
+      fire: "확인",
+      fog: "확인",
+    };
+  }
+  const environmentSources = operationRegionRows.map((row) => ({
+    region: row.label,
+    ...environmentSnapshot(row.operation),
+  }));
+  const environmentCards = [
+    {
+      id: "pm",
+      label: "미세먼지",
+      severeValues: ["매우나쁨"],
+      entries: environmentSources
+        .filter((item) => item.pm.includes("나쁨"))
+        .map((item) => `${item.region} ${item.pm}`),
+    },
+    {
+      id: "fire",
+      label: "산불경보",
+      severeValues: ["매우높음"],
+      entries: environmentSources
+        .filter((item) => item.fire === "높음" || item.fire === "매우높음")
+        .map((item) => `${item.region} ${item.fire}`),
+    },
+    {
+      id: "fog",
+      label: "안개",
+      severeValues: ["발생", "심함"],
+      entries: environmentSources
+        .filter((item) => item.fog !== "없음" && item.fog !== "확인")
+        .map((item) => `${item.region} ${item.fog}`),
+    },
+  ].map((card) => {
+    const isSevere = card.entries.some((entry) => card.severeValues.some((value) => entry.includes(value)));
+    return {
+      id: card.id,
+      label: card.label,
+      value: card.entries.length > 0 ? `${card.entries.length}곳 확인` : "정상",
+      detail: card.entries.length > 0 ? card.entries.join(" · ") : "설정지역 이상 없음",
+      entries: card.entries,
+      tone: card.entries.length > 0 ? (isSevere ? "warning" : "watch") : "normal",
+    };
+  });
+  const selectedEnvironmentCard = environmentCards.find((item) => item.id === selectedEnvironmentId && item.entries.length > 0);
+  const summaryItems = [
+    { label: "개황", value: weather, helper: "일일 기상" },
+    { label: "기온", value: `${minTemp} ~ ${maxTemp}℃`, helper: "최저 / 최고" },
+    { label: "BMNT / EENT", value: `${shiftClock(first.bmnt, dayOffset * -1)} / ${shiftClock(first.eent, dayOffset)}`, helper: "박명" },
+    { label: "일출 / 일몰", value: `${shiftClock(first.sunrise, dayOffset * -1)} / ${shiftClock(first.sunset, dayOffset)}`, helper: "태양" },
+    { label: "월출 / 월몰", value: `${shiftClock(first.moonrise, dayOffset * 16)} / ${shiftClock(first.moonset, dayOffset * 16)}`, helper: "달" },
+    { label: "월광", value: `${first.moonlightPercent}%`, helper: "야간 식별" },
+    { label: "물때", value: dateAdjustedTideAge(first.tideAge, dayOffset), helper: "조석" },
+    {
+      label: "바람",
+      value: `${first.windDirection} ${dateAdjustedNumber(first.surfaceWindMs, dayOffset, 0.6, 0, 40)}m/s`,
+      helper: `상층 ${first.upperWindDirection} ${dateAdjustedNumber(first.upperWindSpeedMs, dayOffset, 0.9, 0, 60)}m/s`,
+    },
+  ];
+  const seaMetricRows = [
+    { label: "간조", value: (data: NonNullable<TheOneOperation["coastal"]>) => shiftedClockPair(data.lowTide, dayOffset) },
+    { label: "만조", value: (data: NonNullable<TheOneOperation["coastal"]>) => shiftedClockPair(data.highTide, dayOffset) },
+    { label: "원해 파고", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.offshoreWaveHeightM, dayOffset, 0.22, 0, 7)}m` },
+    { label: "연안 파고", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.nearshoreWaveHeightM, dayOffset, 0.16, 0, 5)}m` },
+    { label: "수온", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.waterTempC, dayOffset, 0.25, -3, 35)}℃` },
+    { label: "시정", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.visibilityKm, dayOffset, 0.7, 0, 40)}km` },
+  ];
 
   return (
     <section className="desktop-sheet desktop-operation-weather-sheet">
@@ -1887,191 +2144,252 @@ function OperationWeatherAnalysisSheet({ operations }: { operations: TheOneOpera
         {formatDateWithWeekday(sheetDate)} / 음력 {lunarDate}
       </div>
 
-      <div className="desktop-table-scroll">
+      <div className="desktop-table-scroll is-operation-summary">
         <table className="desktop-operation-summary-table">
           <thead>
             <tr>
-              <th>개황</th>
-              <th>기온<br />최저~최고</th>
-              <th>BMNT / EENT</th>
-              <th>일출 / 일몰</th>
-              <th>월출 / 월몰</th>
-              <th>월광</th>
-              <th>물때</th>
-              <th>바람</th>
+              {summaryItems.map((item) => <th key={`operation-summary-head-${item.label}`}>{item.label}</th>)}
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>{weather}</td>
-              <td>{minTemp} ~ {maxTemp}℃</td>
-              <td>{shiftClock(first.bmnt, dayOffset * -1)} / {shiftClock(first.eent, dayOffset)}</td>
-              <td>{shiftClock(first.sunrise, dayOffset * -1)} / {shiftClock(first.sunset, dayOffset)}</td>
-              <td>{shiftClock(first.moonrise, dayOffset * 16)} / {shiftClock(first.moonset, dayOffset * 16)}</td>
-              <td>{first.moonlightPercent}%</td>
-              <td>{dateAdjustedTideAge(first.tideAge, dayOffset)}</td>
-              <td>
-                지상풍 {first.windDirection} / {dateAdjustedNumber(first.surfaceWindMs, dayOffset, 0.6, 0, 40)}m/s<br />
-                상층풍 {first.upperWindDirection} / {dateAdjustedNumber(first.upperWindSpeedMs, dayOffset, 0.9, 0, 60)}m/s
-              </td>
+              {summaryItems.map((item) => (
+                <td key={`operation-summary-value-${item.label}`}>
+                  <strong>{item.value}</strong>
+                  <span>{item.helper}</span>
+                </td>
+              ))}
             </tr>
           </tbody>
         </table>
       </div>
 
-      <div className="desktop-operation-weather-grid">
-        <section className="desktop-operation-panel">
-          <header>
-            <strong>작전지역 현황</strong>
-            <span>선택지역 기준</span>
-          </header>
-          <div className="desktop-table-scroll">
-            <table className="desktop-operation-region-table">
-              <thead>
-                <tr>
-                  <th>지역</th>
-                  <th>개황</th>
-                  <th>기온</th>
-                  <th>환경</th>
+      <div className="desktop-operation-form-grid">
+        <section className="desktop-operation-table-card is-side">
+          <table className="desktop-operation-side-table">
+            <thead>
+              <tr>
+                <th colSpan={2}>환경정보</th>
+              </tr>
+              <tr>
+                <th>구분</th>
+                <th>현황</th>
+              </tr>
+            </thead>
+            <tbody>
+              {environmentCards.map((item) => (
+                <tr key={item.id} className={`is-${item.tone}`}>
+                  <th>{item.label}</th>
+                  <td>
+                    <button
+                      type="button"
+                      className="desktop-operation-env-button"
+                      disabled={item.entries.length === 0}
+                      aria-expanded={selectedEnvironmentId === item.id}
+                      onClick={() => setSelectedEnvironmentId((current) => current === item.id ? null : item.id)}
+                    >
+                      {item.value}
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {regionTableRows.map((row) => (
-                  <tr key={`operation-weather-region-${row.id}`} className={row.isNorthSea ? "is-north-sea" : undefined}>
-                    <th>{row.name}</th>
-                    <td>{row.weather}</td>
-                    <td>{row.temperature}</td>
-                    <td>{row.environment}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+              {selectedEnvironmentCard ? (
+                <tr className="desktop-operation-env-detail-row">
+                  <th>{selectedEnvironmentCard.label}</th>
+                  <td>{selectedEnvironmentCard.detail}</td>
+                </tr>
+              ) : null}
+              <tr className="desktop-operation-subtitle-row">
+                <th colSpan={2}>북한 해역</th>
+              </tr>
+              {northSeaRows.map((row) => (
+                <tr key={`north-compact-${row.id}`}>
+                  <th>{row.name}</th>
+                  <td>{row.weather} · {row.temperature}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
 
-        <section className="desktop-operation-panel">
-          <header>
-            <strong>해양 제원</strong>
-            <span>간조 · 만조 · 파고 · 수온 · 시정</span>
-          </header>
-          <div className="desktop-table-scroll">
-            <table className="desktop-operation-sea-table">
-              <thead>
-                <tr>
-                  <th>구분</th>
-                  {seaColumns.map((operation) => (
-                    <th key={`sea-head-${operation.id}`}>{cleanName(operation)}</th>
+        <section className="desktop-operation-table-card">
+          <table className="desktop-operation-region-table">
+            <thead>
+              <tr>
+                <th colSpan={3}>작전지역 기상</th>
+              </tr>
+              <tr>
+                <th>지역</th>
+                <th>개황</th>
+                <th>기온</th>
+              </tr>
+            </thead>
+            <tbody>
+              {regionTableRows.map((row) => (
+                <tr key={`operation-weather-region-${row.id}`}>
+                  <th>{row.name}</th>
+                  <td>{row.weather}</td>
+                  <td>{row.temperature}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <section className="desktop-operation-table-card">
+          <table className="desktop-operation-sea-table">
+            <thead>
+              <tr>
+                <th colSpan={seaColumns.length + 1}>작전지역 해안</th>
+              </tr>
+              <tr>
+                <th>구분</th>
+                {seaColumns.map((column) => <th key={`sea-head-${column.operation.id}`}>{column.label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {seaMetricRows.map((row) => (
+                <tr key={`sea-row-${row.label}`}>
+                  <th>{row.label}</th>
+                  {seaColumns.map((column) => (
+                    <td key={`${column.operation.id}-${row.label}`}>{column.operation.coastal ? row.value(column.operation.coastal) : "-"}</td>
                   ))}
                 </tr>
-              </thead>
-              <tbody>
-                {[
-                  { label: "간조", value: (data: NonNullable<TheOneOperation["coastal"]>) => shiftedClockPair(data.lowTide, dayOffset) },
-                  { label: "만조", value: (data: NonNullable<TheOneOperation["coastal"]>) => shiftedClockPair(data.highTide, dayOffset) },
-                  { label: "파고원해", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.offshoreWaveHeightM, dayOffset, 0.22, 0, 7)}m` },
-                  { label: "파고내해", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.nearshoreWaveHeightM, dayOffset, 0.16, 0, 5)}m` },
-                  { label: "수온", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.waterTempC, dayOffset, 0.25, -3, 35)}℃` },
-                  { label: "시정", value: (data: NonNullable<TheOneOperation["coastal"]>) => `${dateAdjustedNumber(data.visibilityKm, dayOffset, 0.7, 0, 40)}km` },
-                ].map((row) => (
-                  <tr key={`operation-weather-sea-${row.label}`}>
-                    <th>{row.label}</th>
-                    {seaColumns.map((operation) => (
-                      <td key={`${row.label}-${operation.id}`}>{operation.coastal ? row.value(operation.coastal) : "-"}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="desktop-operation-panel is-north">
-          <header>
-            <strong>북한 해역</strong>
-            <span>해주 · 남포</span>
-          </header>
-          <div className="desktop-operation-north-list">
-            {northSeaRows.map((row) => (
-              <article key={`north-sea-${row.id}`}>
-                <strong>{row.name}</strong>
-                <dl>
-                  <div>
-                    <dt>개황</dt>
-                    <dd>{row.weather}</dd>
-                  </div>
-                  <div>
-                    <dt>기온</dt>
-                    <dd>{row.temperature}</dd>
-                  </div>
-                  <div>
-                    <dt>환경</dt>
-                    <dd>{row.environment}</dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
+              ))}
+            </tbody>
+          </table>
         </section>
       </div>
 
-      <section className="desktop-operation-panel is-week">
-        <header>
-          <strong>주간 전망</strong>
-          <span>개황 · 상층풍 · 월광</span>
-        </header>
-        <div className="desktop-table-scroll">
-          <table className="desktop-operation-week-table">
-            <tbody>
-              <tr>
-                <th>구분</th>
-                {weekDates.map((date) => (
-                  <th key={`week-date-${date.year}-${date.month}-${date.day}`}>{String(date.month).padStart(2, "0")}.{String(date.day).padStart(2, "0")}({KOREAN_WEEKDAYS[datePartsToUtcDate(date).getUTCDay()]})</th>
-                ))}
-              </tr>
-              <tr>
-                <th>개황</th>
-                {weekDates.map((date, index) => (
-                  <td key={`week-weather-${date.day}`}>{dateAdjustedWeather(weather, dayOffset + index)}</td>
-                ))}
-              </tr>
-              <tr>
-                <th>상층풍</th>
-                {weekDates.map((date, index) => (
-                  <td key={`week-wind-${date.day}`}>{first.upperWindDirection} / {dateAdjustedNumber(first.upperWindSpeedMs, dayOffset + index, 0.9, 0, 60)}m/s</td>
-                ))}
-              </tr>
-              <tr>
-                <th>월광</th>
-                {weekDates.map((date, index) => (
-                  <td key={`week-moon-${date.day}`}>{Math.max(0, Math.min(100, first.moonlightPercent + index * 4))}%</td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <section className="desktop-operation-table-card is-week">
+        <table className="desktop-operation-week-table">
+          <tbody>
+            <tr>
+              <th>주간기상</th>
+              {weekDates.map((date) => (
+                <th key={`week-head-${date.year}-${date.month}-${date.day}`}>
+                  {String(date.month).padStart(2, "0")}.{String(date.day).padStart(2, "0")}({KOREAN_WEEKDAYS[datePartsToUtcDate(date).getUTCDay()]})
+                </th>
+              ))}
+            </tr>
+            <tr>
+              <th>개황</th>
+              {weekDates.map((date, index) => (
+                <td key={`week-weather-${date.year}-${date.month}-${date.day}`}>{dateAdjustedWeather(weather, dayOffset + index)}</td>
+              ))}
+            </tr>
+            <tr>
+              <th>상층풍</th>
+              {weekDates.map((date, index) => (
+                <td key={`week-wind-${date.year}-${date.month}-${date.day}`}>
+                  {first.upperWindDirection} {dateAdjustedNumber(first.upperWindSpeedMs, dayOffset + index, 0.9, 0, 60)}m/s
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
       </section>
     </section>
   );
 }
 
-function AccessAssessmentSheet({ operations }: { operations: TheOneOperation[] }) {
+type ThreatRegionRow = {
+  id: string;
+  label: string;
+  operation?: TheOneOperation;
+};
+
+function findCoastalOperation(keywords: string[]) {
+  return allOperations.find((operation) => {
+    if (operation.type !== "coastal" || !operation.coastal) return false;
+    const text = `${operation.id} ${operation.name} ${operation.area}`;
+    return keywords.some((keyword) => text.includes(keyword));
+  });
+}
+
+function threatRegion(label: string, keywords: string[]): ThreatRegionRow {
+  return {
+    id: label,
+    label,
+    operation: findCoastalOperation(keywords),
+  };
+}
+
+function waveRange(value: number, dayOffset: number, spread: number) {
+  const low = dateAdjustedNumber(value, dayOffset, spread, 0, 8);
+  const high = Number(Math.min(8, low + 0.2).toFixed(1));
+  return `${low.toFixed(1)} - ${high.toFixed(1)}m`;
+}
+
+function compactClockPair(value: string | undefined, dayOffset: number, minuteStep = 12) {
+  return shiftedClockPair(value, dayOffset, minuteStep).replace(/\s+/g, "");
+}
+
+function threatValueClass(value: string) {
+  if (/주의보|경보|비|안개|폭우|악천후|0\.[0-7]|[0-2]\.\d+km/.test(value)) return "is-watch";
+  return "";
+}
+
+function addDaysToParts(parts: { year: number; month: number; day: number }, delta: number) {
+  const date = datePartsToUtcDate(parts);
+  date.setUTCDate(date.getUTCDate() + delta);
+  return kstDateParts(date);
+}
+
+function AccessAssessmentSheet({ operations, alerts }: { operations: TheOneOperation[]; alerts: LiveAlert[] }) {
   const coastal = operations.filter((operation) => operation.type === "coastal" && operation.coastal);
-  const outbound = coastal.filter((operation) => operation.name.includes("중국") || operation.area.includes("황해")).slice(0, 4);
-  const inbound = coastal.filter((operation) => !operation.name.includes("중국")).slice(0, 6);
   const currentDate = kstDateParts();
   const [sheetDate, setSheetDate] = useState(() => currentDate);
-  const displayDate = datePartsToUtcDate(sheetDate);
+  const [selectedHour, setSelectedHour] = useState(() => kstHour());
+  const dayOffset = daysBetweenParts(currentDate, sheetDate);
+  const hourOffset = (selectedHour - 8) / 24;
+  const selectedDate = datePartsToUtcDate(sheetDate);
+  const dateTabs = [
+    { label: "어제", delta: -1 },
+    { label: "오늘", delta: 0 },
+    { label: "내일", delta: 1 },
+    { label: "모레", delta: 2 },
+    { label: "글피", delta: 3 },
+  ];
+  const timeTabs = Array.from({ length: 24 }, (_, hour) => hour);
+  const inboundRows = [
+    threatRegion("당진", ["당진 권역", "당진"]),
+    threatRegion("태안", ["태안 권역", "태안"]),
+    threatRegion("보령", ["보령 권역", "보령"]),
+    threatRegion("서천", ["서천", "장항", "홍원", "마량"]),
+  ];
+  const outboundRows = [
+    threatRegion("대련", ["대련"]),
+    threatRegion("위해", ["위해"]),
+    {
+      id: "공해",
+      label: "공해",
+      operation: findCoastalOperation(["동중국해 참고구역", "중국 동해", "원해 관측"]),
+    },
+  ];
+  const primary = inboundRows.find((row) => row.operation?.coastal)?.operation ?? coastal[0];
+  const primaryData = primary?.coastal;
+  const threatWarningItems = [...inboundRows, ...outboundRows].flatMap((row) => {
+    const matchedWarnings = row.operation ? alertsForOperation(alerts, row.operation).slice(0, 2) : [];
+    if (matchedWarnings.length > 0) {
+      return matchedWarnings.map((alert) => ({ id: `${row.id}-${alert.id}`, label: row.label, text: alertTickerText(alert) }));
+    }
+
+    const fallbackWarning = row.operation?.coastal ? dateAdjustedAlert(row.operation.coastal.weatherAlert, dayOffset) : "없음";
+    return fallbackWarning === "없음" ? [] : [{ id: `${row.id}-fallback`, label: row.label, text: fallbackWarning }];
+  });
+  const tideAgeText = primaryData ? dateAdjustedTideAge(primaryData.tideAge, dayOffset) : "-";
 
   if (coastal.length === 0) return <DesktopEmptySheet label="해안 지역을 선택하면 판단표가 표시됩니다." />;
 
   return (
-    <section className="desktop-sheet desktop-assessment-sheet">
+    <section className="desktop-sheet desktop-threat-sheet">
       <div className="desktop-sheet-head">
         <div className="desktop-month-nav">
           <button
             type="button"
             onClick={() => {
-              const previous = new Date(displayDate);
+              const previous = new Date(selectedDate);
               previous.setUTCDate(previous.getUTCDate() - 1);
               setSheetDate(kstDateParts(previous));
             }}
@@ -2079,11 +2397,11 @@ function AccessAssessmentSheet({ operations }: { operations: TheOneOperation[] }
           >
             <ChevronLeft size={18} />
           </button>
-          <h1>{sheetDate.year}년 {sheetDate.month}월 {sheetDate.day}일 밀입국 가능성 판단표</h1>
+          <h1>해상위협 판단지원</h1>
           <button
             type="button"
             onClick={() => {
-              const next = new Date(displayDate);
+              const next = new Date(selectedDate);
               next.setUTCDate(next.getUTCDate() + 1);
               setSheetDate(kstDateParts(next));
             }}
@@ -2097,71 +2415,103 @@ function AccessAssessmentSheet({ operations }: { operations: TheOneOperation[] }
           <button type="button" onClick={() => window.print()}>인쇄</button>
         </div>
       </div>
-      <AssessmentBlock title="출항 가능여부 평가 지표" rows={outbound.length > 0 ? outbound : coastal.slice(0, 2)} sheetDate={sheetDate} />
-      <AssessmentBlock title="접안 가능여부 평가 지표" rows={inbound.length > 0 ? inbound : coastal.slice(0, 4)} sheetDate={sheetDate} />
+
+      <div className="desktop-threat-date-grid">
+        {dateTabs.map((tab) => {
+          const date = addDaysToParts(currentDate, tab.delta);
+          const isActive = tab.delta === dayOffset;
+          return (
+            <button key={tab.label} type="button" className={isActive ? "is-active" : ""} onClick={() => setSheetDate(date)}>
+              <span>{tab.label}</span>
+              <strong>{String(date.month).padStart(2, "0")}.{String(date.day).padStart(2, "0")}({KOREAN_WEEKDAYS[datePartsToUtcDate(date).getUTCDay()]})</strong>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="desktop-threat-time-grid">
+        {timeTabs.map((hour) => (
+          <button key={hour} type="button" className={hour === selectedHour ? "is-active" : ""} onClick={() => setSelectedHour(hour)}>
+            {String(hour).padStart(2, "0")}시
+          </button>
+        ))}
+      </div>
+
+      <div className="desktop-threat-summary">
+        <article>
+          <span>기준</span>
+          <strong>{formatDateWithWeekday(sheetDate)} {String(selectedHour).padStart(2, "0")}:00</strong>
+        </article>
+        <article>
+          <span>물때</span>
+          <strong>{tideAgeText}</strong>
+        </article>
+      </div>
+
+      <div className="desktop-threat-ticker" aria-label="해상위협 지역 특보현황">
+        <span>지역 특보</span>
+        <div>
+          <p>
+            {threatWarningItems.length > 0
+              ? [...threatWarningItems, ...threatWarningItems].map((item) => `${item.label} ${item.text}`).join(" · ")
+              : "당진 · 태안 · 보령 · 서천 · 대련 · 위해 · 공해 현재 표시할 특보 없음"}
+          </p>
+        </div>
+      </div>
+
+      <div className="desktop-threat-board">
+        <ThreatMatrix title="접안지역" rows={inboundRows} dayOffset={dayOffset + hourOffset} variant="inbound" />
+        <ThreatMatrix title="출항지역" rows={outboundRows} dayOffset={dayOffset + hourOffset} variant="outbound" />
+      </div>
     </section>
   );
 }
 
-function AssessmentBlock({ title, rows, sheetDate }: { title: string; rows: TheOneOperation[]; sheetDate: { year: number; month: number; day: number } }) {
-  const dayOffset = daysBetweenParts(kstDateParts(), sheetDate);
+function ThreatMatrix({ title, rows, dayOffset, variant }: { title: string; rows: ThreatRegionRow[]; dayOffset: number; variant: "inbound" | "outbound" }) {
+  const dayOnly = Math.round(dayOffset);
+  const metrics = variant === "inbound"
+    ? [
+        { label: "개황", get: (data: CoastalData, rowOffset: number, operation?: TheOneOperation) => dateAdjustedWeather(operation?.coastalEnvironment?.weatherStatus ?? "맑음", Math.round(rowOffset)) },
+        { label: "1차 파고", get: (data: CoastalData, rowOffset: number) => waveRange(data.nearshoreWaveHeightM, rowOffset, 0.16) },
+        { label: "2차 파고", get: (data: CoastalData, rowOffset: number) => waveRange(data.offshoreWaveHeightM, rowOffset, 0.22) },
+        { label: "간조", get: (data: CoastalData) => compactClockPair(data.lowTide, dayOnly) },
+        { label: "만조", get: (data: CoastalData) => compactClockPair(data.highTide, dayOnly) },
+        { label: "수온", get: (data: CoastalData, rowOffset: number) => `${dateAdjustedNumber(data.waterTempC, rowOffset, 0.22, -3, 35)}℃` },
+        { label: "시정", get: (data: CoastalData, rowOffset: number) => `${dateAdjustedNumber(data.visibilityKm, rowOffset, 0.5, 0.2, 30)}km` },
+      ]
+    : [
+        { label: "개황", get: (data: CoastalData, rowOffset: number, operation?: TheOneOperation) => dateAdjustedWeather(operation?.coastalEnvironment?.weatherStatus ?? "맑음", Math.round(rowOffset)) },
+        { label: "1차 파고", get: (data: CoastalData, rowOffset: number) => waveRange(data.nearshoreWaveHeightM, rowOffset, 0.18) },
+        { label: "2차 파고", get: (data: CoastalData, rowOffset: number) => waveRange(data.offshoreWaveHeightM, rowOffset, 0.26) },
+        { label: "물때", get: (data: CoastalData) => dateAdjustedTideAge(data.tideAge, dayOnly) },
+        { label: "창조류", get: (data: CoastalData, rowOffset: number) => `${data.currentDirection} ${dateAdjustedNumber(data.currentSpeedKt, rowOffset, 0.08, 0, 5)}kt` },
+        { label: "수온", get: (data: CoastalData, rowOffset: number) => `${dateAdjustedNumber(data.waterTempC, rowOffset, 0.25, -3, 35)}℃` },
+        { label: "시정", get: (data: CoastalData, rowOffset: number) => `${dateAdjustedNumber(data.visibilityKm, rowOffset, 0.55, 0.2, 30)}km` },
+      ];
 
   return (
-    <section className="desktop-assessment-block">
+    <section className="desktop-threat-matrix">
+      <h2>{title}</h2>
       <div className="desktop-table-scroll">
-        <table className="desktop-assessment-table">
+        <table>
           <thead>
-            <tr className="desktop-assessment-title-row">
-              <th colSpan={10}>{title}</th>
-            </tr>
             <tr>
-              <th rowSpan={2}>구분</th>
-              <th colSpan={2}>기상</th>
-              <th colSpan={2}>해상</th>
-              <th colSpan={3}>지역</th>
-              <th>환경조건</th>
-              <th rowSpan={2}>종합평가</th>
-            </tr>
-            <tr>
-              <th>개황</th>
-              <th>기상특보</th>
-              <th>앞바다</th>
-              <th>먼바다</th>
-              <th>물때</th>
-              <th>조류</th>
-              <th>수온</th>
-              <th>시정조건</th>
+              <th>구분</th>
+              {rows.map((row) => <th key={`${title}-${row.id}`}>{row.label}</th>)}
             </tr>
           </thead>
           <tbody>
-            {rows.map((operation, rowIndex) => {
-              const data = operation.coastal;
-              if (!data) return null;
-              const rowOffset = dayOffset + rowIndex * 0.7;
-              const hasObservedForecast = dayOffset <= 0;
-              const weather = hasObservedForecast ? dateAdjustedWeather(operation.coastalEnvironment?.weatherStatus ?? "맑음", Math.round(rowOffset)) : "";
-              const weatherAlert = hasObservedForecast ? dateAdjustedAlert(data.weatherAlert, dayOffset) : "";
-              const nearshore = dateAdjustedNumber(data.nearshoreWaveHeightM, rowOffset, 0.18, 0, 5);
-              const offshore = dateAdjustedNumber(data.offshoreWaveHeightM, rowOffset, 0.24, 0, 7);
-              const currentSpeed = dateAdjustedNumber(data.currentSpeedKt, rowOffset, 0.09, 0, 4);
-              const waterTemp = dateAdjustedNumber(data.waterTempC, rowOffset, 0.25, -3, 35);
-              const visibility = dateAdjustedNumber(data.visibilityKm, rowOffset, 0.6, 0.2, 30);
-
-              return (
-                <tr key={`${title}-${operation.id}`}>
-                  <th>{cleanName(operation)}</th>
-                  <td>{weather}</td>
-                  <td>{weatherAlert}</td>
-                  <td>{nearshore}m<br />{shiftedClockPair(data.highTide, dayOffset)}</td>
-                  <td>{offshore}m<br />{shiftedClockPair(data.lowTide, dayOffset)}</td>
-                  <td>{dateAdjustedTideAge(data.tideAge, dayOffset)}</td>
-                  <td>{data.currentDirection} {currentSpeed}kt</td>
-                  <td>{waterTemp}℃</td>
-                  <td>{visibility}km</td>
-                  <td />
-                </tr>
-              );
-            })}
+            {metrics.map((metric) => (
+              <tr key={`${title}-${metric.label}`}>
+                <th>{metric.label}</th>
+                {rows.map((row, rowIndex) => {
+                  const data = row.operation?.coastal;
+                  const rowOffset = dayOffset + rowIndex * 0.45;
+                  const value = data ? metric.get(data, rowOffset, row.operation) : "-";
+                  return <td key={`${title}-${metric.label}-${row.id}`} className={threatValueClass(value)}>{value}</td>;
+                })}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -2307,29 +2657,115 @@ function AdminPinPanel({
   );
 }
 
+function DesktopOffshorePointPanel({
+  points,
+  selectedIds,
+  onAdd,
+  onRemove,
+  onToggle,
+}: {
+  points: TheOneOperation[];
+  selectedIds: string[];
+  onAdd: (input: OffshorePointInput) => void;
+  onRemove: (id: string) => void;
+  onToggle: (id: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [message, setMessage] = useState("");
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const lat = Number(latitude);
+    const lon = Number(longitude);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      setMessage("위도는 -90~90, 경도는 -180~180 범위로 입력해 주세요.");
+      return;
+    }
+
+    onAdd({ name, latitude: lat, longitude: lon });
+    setName("");
+    setLatitude("");
+    setLongitude("");
+    setMessage("원해 좌표 관측점이 추가되었습니다.");
+  }
+
+  return (
+    <div className="desktop-panel desktop-offshore-panel">
+      <div>
+        <h2>원해 좌표 관측점</h2>
+        <p>위도·경도를 입력하면 원해 관측점으로 추가됩니다. 좌표별 공식 API 캐시가 연결되면 해당 지점 수신값으로 자동 대체됩니다.</p>
+      </div>
+      <form onSubmit={submit}>
+        <label>
+          <span>명칭</span>
+          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="예: 서해 원해 1" />
+        </label>
+        <label>
+          <span>위도</span>
+          <input value={latitude} onChange={(event) => setLatitude(event.target.value)} inputMode="decimal" placeholder="36.5000" />
+        </label>
+        <label>
+          <span>경도</span>
+          <input value={longitude} onChange={(event) => setLongitude(event.target.value)} inputMode="decimal" placeholder="125.8000" />
+        </label>
+        <button type="submit">좌표 추가</button>
+      </form>
+      {message && <strong>{message}</strong>}
+      {points.length > 0 && (
+        <div className="desktop-offshore-list">
+          {points.map((point) => {
+            const checked = selectedIds.includes(point.id);
+            const [lat, lon] = point.center ?? [0, 0];
+
+            return (
+              <article key={point.id}>
+                <div>
+                  <span>{point.name}</span>
+                  <em>{lat.toFixed(4)}, {lon.toFixed(4)}</em>
+                </div>
+                <button type="button" onClick={() => onToggle(point.id)}>{checked ? "숨김" : "표시"}</button>
+                <button type="button" className="is-danger" onClick={() => onRemove(point.id)}>삭제</button>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DesktopSettings({
   catalog,
   selectedIds,
   activeType,
   adminPin,
+  customOffshoreOperations,
   onTypeChange,
   onToggle,
   onClear,
   onDefault,
   onSelectAllType,
   onChangePin,
+  onAddOffshorePoint,
+  onRemoveCustomOffshorePoint,
   onLock,
 }: {
   catalog: TheOneOperation[];
   selectedIds: string[];
   activeType: OperationType;
   adminPin: string;
+  customOffshoreOperations: TheOneOperation[];
   onTypeChange: (type: OperationType) => void;
   onToggle: (id: string) => void;
   onClear: () => void;
   onDefault: () => void;
   onSelectAllType: () => void;
   onChangePin: (pin: string) => void;
+  onAddOffshorePoint: (input: OffshorePointInput) => void;
+  onRemoveCustomOffshorePoint: (id: string) => void;
   onLock: () => void;
 }) {
   const candidates = catalog.filter((operation) => operation.type === activeType);
@@ -2358,6 +2794,15 @@ function DesktopSettings({
         </div>
       </div>
       <AdminPinPanel adminPin={adminPin} onChangePin={onChangePin} onLock={onLock} />
+      {activeType === "coastal" && (
+        <DesktopOffshorePointPanel
+          points={customOffshoreOperations}
+          selectedIds={selectedIds}
+          onAdd={onAddOffshorePoint}
+          onRemove={onRemoveCustomOffshorePoint}
+          onToggle={onToggle}
+        />
+      )}
       <div className="desktop-catalog-panel">
         {[...grouped.entries()].map(([provinceName, cityMap]) => {
           const provinceItems = [...cityMap.values()].flat();
