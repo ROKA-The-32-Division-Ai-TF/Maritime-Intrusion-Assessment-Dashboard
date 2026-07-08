@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 const PORT = Number(process.env.FEEDBACK_PORT || 3810);
@@ -36,6 +36,42 @@ function allowedByRateLimit(ip) {
   recent.push(now);
   rateLimit.set(ip, recent);
   return true;
+}
+
+function sanitizeRecord(record) {
+  return {
+    id: String(record.id || ""),
+    createdAt: String(record.createdAt || ""),
+    path: String(record.path || "").slice(0, 200),
+    contact: String(record.contact || "").trim().slice(0, 80),
+    message: String(record.message || "").trim().slice(0, 1200),
+  };
+}
+
+async function handleGet(_req, res) {
+  let text = "";
+  try {
+    text = await readFile(STORE_PATH, "utf8");
+  } catch {
+    json(res, 200, { ok: true, items: [] });
+    return;
+  }
+
+  const items = text
+    .split("\n")
+    .filter(Boolean)
+    .slice(-50)
+    .reverse()
+    .map((line) => {
+      try {
+        return sanitizeRecord(JSON.parse(line));
+      } catch {
+        return null;
+      }
+    })
+    .filter((item) => item?.message);
+
+  json(res, 200, { ok: true, items });
 }
 
 async function readBody(req) {
@@ -84,13 +120,18 @@ async function handlePost(req, res) {
 
   await mkdir(dirname(STORE_PATH), { recursive: true });
   await appendFile(STORE_PATH, `${JSON.stringify(record)}\n`, { mode: 0o600 });
-  json(res, 200, { ok: true, id: record.id });
+  json(res, 200, { ok: true, item: sanitizeRecord(record) });
 }
 
 createServer(async (req, res) => {
   try {
     if (!req.url?.startsWith("/api/feedback")) {
       json(res, 404, { ok: false, error: "not_found" });
+      return;
+    }
+
+    if (req.method === "GET") {
+      await handleGet(req, res);
       return;
     }
 

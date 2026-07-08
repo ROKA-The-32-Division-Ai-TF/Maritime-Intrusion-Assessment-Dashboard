@@ -73,6 +73,13 @@ type DesktopMetric = {
   helper: string;
   icon: IconType;
 };
+type FeedbackItem = {
+  id: string;
+  createdAt: string;
+  message: string;
+  contact?: string;
+  path?: string;
+};
 type OffshorePointInput = {
   name: string;
   latitude: number;
@@ -86,6 +93,7 @@ const DESKTOP_TYPE_KEY = "baekryong-desktop-type-v1";
 const DESKTOP_ADMIN_PIN_KEY = "baekryong-desktop-admin-pin-v1";
 const DESKTOP_CUSTOM_OFFSHORE_KEY = "baekryong-desktop-custom-offshore-v1";
 const DESKTOP_FEEDBACK_DRAFT_KEY = "baekryong-desktop-feedback-draft-v1";
+const DESKTOP_FEEDBACK_LOCAL_KEY = "baekryong-feedback-local-v1";
 const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
   { id: "region", label: "작전지역 기상", icon: MapIcon },
   { id: "weather", label: "기상분석표", icon: CalendarDays },
@@ -100,6 +108,8 @@ const TYPES: OperationType[] = ["coastal", "ground", "air"];
 const MAP_ZOOM_MIN = 4;
 const MAP_ZOOM_MAX = 11;
 const DESKTOP_HOURLY_STEPS = Array.from({ length: 24 }, (_, index) => index + 1);
+const DISASTER_HOUR_OFFSETS = Array.from({ length: 8 }, (_, index) => index);
+const DISASTER_TARGET_KEYWORDS = ["당진", "서산", "태안", "보령", "서천", "세종", "계룡"];
 const CHUNGCHEONG_ALERT_KEYWORDS = [
   "충남",
   "충청남도",
@@ -1059,6 +1069,7 @@ export function DesktopCommandApp() {
       </aside>
       <main className={cx("desktop-main", activeMenu === "settings" && "is-settings")}>
         <DesktopNewsTicker alerts={alertsForToday} />
+        <DisasterSituationBanner operations={selectedOperations} alerts={alertsForToday} />
         <div className="desktop-content">
           {activeMenu === "region" && (
             <OperationRegionStatus
@@ -1216,6 +1227,42 @@ function AlertModalColumn({ title, alerts, empty }: { title: string; alerts: Liv
         )}
       </div>
     </div>
+  );
+}
+
+function DisasterSituationBanner({ operations, alerts }: { operations: TheOneOperation[]; alerts: LiveAlert[] }) {
+  const rows = disasterSituationRows(operations);
+  const activeAlerts = alerts.filter((alert) => !alertIsEnded(alert));
+  const totalRain = rows.reduce((sum, operation) => sum + operationRainMm(operation), 0);
+  const maxWind = rows.reduce((max, operation) => Math.max(max, operationWindMs(operation)), 0);
+  const peakHourlyRain = rows.reduce((max, operation) => Math.max(max, ...rainfallForecast(operation)), 0);
+  const movingItems = rows.length > 0
+    ? rows.map((operation) => `${cleanName(operation)} ${operationRainMm(operation).toFixed(1)}mm · ${operationTemperature(operation)}℃ · ${operationWindMs(operation).toFixed(1)}m/s`)
+    : ["관리자 설정에서 지역을 선택하면 재난상황판이 활성화됩니다"];
+
+  return (
+    <section className="desktop-disaster-banner" aria-label="재난상황판">
+      <div className="desktop-disaster-banner-title">
+        <span><Cloud size={18} /></span>
+        <div>
+          <strong>재난상황판</strong>
+          <em>설정지역 강우 · 풍속 · 속보 감시</em>
+        </div>
+      </div>
+      <div className="desktop-disaster-banner-kpis">
+        <b><small>종합 강우</small>{totalRain.toFixed(1)}mm</b>
+        <b><small>시간 최대</small>{peakHourlyRain.toFixed(1)}mm</b>
+        <b><small>최대 풍속</small>{maxWind.toFixed(1)}m/s</b>
+        <b className={activeAlerts.length > 0 ? "is-alert" : ""}><small>진행 속보</small>{activeAlerts.length}건</b>
+      </div>
+      <div className="desktop-disaster-banner-window">
+        <div className={cx("desktop-disaster-banner-track", movingItems.length < 2 && "is-static")}>
+          {[...movingItems, ...movingItems].map((item, index) => (
+            <span key={`${item}-${index}`}>{item}</span>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1983,11 +2030,26 @@ function nextKstHourLabel(offset: number) {
 function rainfallForecast(operation: TheOneOperation) {
   const rain = operationRainMm(operation);
   const probability = operationRainProbability(operation);
-  return [0, 1, 2, 3, 4, 5].map((offset) => {
+  return DISASTER_HOUR_OFFSETS.map((offset) => {
     const probabilityBump = probability >= 70 ? 0.9 : probability >= 40 ? 0.35 : 0.05;
     const curve = Math.max(0, Math.sin((offset + 1) / 1.9) * (rain > 0 ? 0.8 : 0.22));
     return Number(Math.max(0, rain + probabilityBump + curve - offset * 0.12).toFixed(1));
   });
+}
+
+function disasterSituationRows(operations: TheOneOperation[]) {
+  const picked = DISASTER_TARGET_KEYWORDS
+    .map((keyword) => findAnyOperationByKeywords(operations, [keyword]))
+    .filter((operation): operation is TheOneOperation => Boolean(operation));
+  const unique = [...new Map(picked.map((operation) => [operation.id, operation])).values()];
+  return (unique.length > 0 ? unique : operations).slice(0, 7);
+}
+
+function rainfallCellTone(value: number) {
+  if (value >= 30) return "is-danger";
+  if (value >= 10) return "is-warning";
+  if (value >= 1) return "is-watch";
+  return "is-calm";
 }
 
 function windImpactText(windMs: number) {
@@ -2006,13 +2068,10 @@ function waveImpactText(waveM: number) {
 }
 
 function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOperation[]; alerts: LiveAlert[] }) {
-  const targetKeywords = ["당진", "서산", "태안", "보령", "서천", "세종", "계룡"];
-  const rows = targetKeywords
-    .map((keyword) => findAnyOperationByKeywords(operations, [keyword]))
-    .filter((operation): operation is TheOneOperation => Boolean(operation))
-    .slice(0, 7);
-  const base = rows[0] ?? operations[0];
-  const forecast = base ? rainfallForecast(base) : [];
+  const rows = disasterSituationRows(operations);
+  const hourlyLabels = DISASTER_HOUR_OFFSETS.map(nextKstHourLabel);
+  const rainRows = rows.map((operation) => ({ operation, forecast: rainfallForecast(operation) }));
+  const peakHourlyRain = Math.max(0, ...rainRows.flatMap((row) => row.forecast));
   const totalRain = rows.reduce((sum, operation) => sum + operationRainMm(operation), 0);
   const maxWind = rows.reduce((max, operation) => Math.max(max, operationWindMs(operation)), 0);
   const maxWave = rows.reduce((max, operation) => Math.max(max, operationWaveM(operation)), 0);
@@ -2030,8 +2089,8 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
     <section className="desktop-disaster-board">
       <header>
         <div>
-          <span>재난상황판</span>
-          <strong>충남·대전·세종 기상 위험 요약</strong>
+          <span>Disaster Operations Board</span>
+          <strong>재난상황판</strong>
         </div>
         <em suppressHydrationWarning>{new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })} 기준</em>
       </header>
@@ -2043,6 +2102,11 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
           <strong>{totalRain.toFixed(1)}mm</strong>
         </article>
         <article>
+          <Activity size={18} />
+          <span>시간 최대 강우</span>
+          <strong>{peakHourlyRain.toFixed(1)}mm</strong>
+        </article>
+        <article>
           <Thermometer size={18} />
           <span>평균 기온</span>
           <strong>{averageTemp}℃</strong>
@@ -2052,29 +2116,49 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
           <span>최대 풍속</span>
           <strong>{maxWind.toFixed(1)}m/s</strong>
         </article>
-        <article>
-          <Waves size={18} />
-          <span>최대 풍랑</span>
-          <strong>{maxWave.toFixed(1)}m</strong>
-        </article>
       </div>
 
       <div className="desktop-disaster-main-grid">
-        <article className="desktop-disaster-forecast">
-          <h3>시간별 예상 강우량</h3>
-          <div>
-            {forecast.map((value, index) => (
-              <span key={`rain-${index}`}>
-                <em>{nextKstHourLabel(index)}</em>
-                <b style={{ height: `${Math.max(8, Math.min(100, value * 18 + 8))}%` }} />
-                <strong>{value}mm</strong>
-              </span>
-            ))}
+        <article className="desktop-disaster-rain-table-card">
+          <div className="desktop-disaster-card-head">
+            <h3>시간별 강우량</h3>
+            <span>설정지역 기준</span>
+          </div>
+          <div className="desktop-disaster-rain-table-wrap">
+            <table className="desktop-disaster-rain-table">
+              <thead>
+                <tr>
+                  <th>지역</th>
+                  {hourlyLabels.map((label) => <th key={`rain-head-${label}`}>{label}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {rainRows.map((row) => (
+                  <tr key={`rain-row-${row.operation.id}`}>
+                    <th>{cleanName(row.operation)}</th>
+                    {row.forecast.map((value, index) => (
+                      <td key={`${row.operation.id}-rain-${index}`} className={rainfallCellTone(value)}>
+                        <strong>{value.toFixed(1)}</strong>
+                        <span>mm</span>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                {rainRows.length === 0 && (
+                  <tr>
+                    <td colSpan={hourlyLabels.length + 1}>관리자 설정에서 지역을 선택하세요.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </article>
 
         <article className="desktop-disaster-region-list">
-          <h3>설정지역 현황</h3>
+          <div className="desktop-disaster-card-head">
+            <h3>설정지역 현황</h3>
+            <span>강우 · 기온 · 풍속</span>
+          </div>
           <div>
             {rows.map((operation) => (
               <b key={`disaster-${operation.id}`}>
@@ -2087,13 +2171,19 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
         </article>
 
         <article className="desktop-disaster-reference">
-          <h3>풍속·풍랑 참고</h3>
+          <div className="desktop-disaster-card-head">
+            <h3>풍속·풍랑 참고</h3>
+            <span>피해 참고값</span>
+          </div>
           <p>풍속 {maxWind.toFixed(1)}m/s: {windImpactText(maxWind)}</p>
           <p>파고 {maxWave.toFixed(1)}m: {waveImpactText(maxWave)}</p>
         </article>
 
         <article className="desktop-disaster-alerts">
-          <h3>속보</h3>
+          <div className="desktop-disaster-card-head">
+            <h3>속보</h3>
+            <span>진행 중</span>
+          </div>
           {activeAlerts.length > 0 ? activeAlerts.map((alert) => (
             <p key={`disaster-alert-${alert.id}`}>{alertTickerText(alert)}</p>
           )) : (
@@ -2102,7 +2192,10 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
         </article>
 
         <article className="desktop-disaster-river">
-          <h3>수위·급류</h3>
+          <div className="desktop-disaster-card-head">
+            <h3>수위·급류</h3>
+            <span>연동 대기</span>
+          </div>
           <div>
             {riverCards.map((card) => (
               <span key={card.name}>
@@ -2926,10 +3019,30 @@ function DesktopFeedbackPanel() {
   const [memo, setMemo] = useState(() => safeLocalStorage()?.getItem(DESKTOP_FEEDBACK_DRAFT_KEY) ?? "");
   const [contact, setContact] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "local" | "error">("idle");
+  const [items, setItems] = useState<FeedbackItem[]>([]);
+  const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "error">("loading");
 
   useEffect(() => {
     safeLocalStorage()?.setItem(DESKTOP_FEEDBACK_DRAFT_KEY, memo);
   }, [memo]);
+
+  useEffect(() => {
+    let active = true;
+
+    void fetchFeedbackItems().then((nextItems) => {
+      if (!active) return;
+      setItems(nextItems);
+      setLoadStatus("ready");
+    }).catch(() => {
+      if (!active) return;
+      setItems(readLocalFeedbackItems());
+      setLoadStatus("error");
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2956,33 +3069,74 @@ function DesktopFeedbackPanel() {
       });
 
       if (!response.ok) throw new Error("feedback failed");
+      const responseBody = await response.json().catch(() => null) as { item?: FeedbackItem } | null;
       setMemo("");
       setContact("");
       safeLocalStorage()?.removeItem(DESKTOP_FEEDBACK_DRAFT_KEY);
+      if (responseBody?.item) {
+        setItems((current) => [responseBody.item!, ...current.filter((item) => item.id !== responseBody.item!.id)].slice(0, 50));
+      } else {
+        void fetchFeedbackItems().then(setItems);
+      }
       setStatus("sent");
     } catch {
       const storage = safeLocalStorage();
-      const previous = JSON.parse(storage?.getItem("baekryong-feedback-local-v1") ?? "[]") as unknown[];
-      storage?.setItem("baekryong-feedback-local-v1", JSON.stringify([payload, ...previous].slice(0, 30)));
+      const fallbackItem: FeedbackItem = {
+        id: `local-${Date.now()}`,
+        createdAt: payload.createdAt,
+        contact: payload.contact,
+        message: payload.message,
+        path: payload.path,
+      };
+      const previous = readLocalFeedbackItems();
+      const next = [fallbackItem, ...previous].slice(0, 30);
+      storage?.setItem(DESKTOP_FEEDBACK_LOCAL_KEY, JSON.stringify(next));
+      setItems(next);
       setStatus("local");
     }
   }
 
   return (
     <section className="desktop-feedback-page">
-      <div className="desktop-feedback-hero">
-        <span>
-          <MessageSquare size={26} />
-        </span>
-        <div>
-          <em>운용자 메모</em>
-          <h1>사용자 피드백</h1>
-          <p>현장 운용 중 발견한 오류, 불편사항, 추가 요청을 남길 수 있습니다.</p>
+      <article className="desktop-feedback-list-panel">
+        <header>
+          <span><MessageSquare size={22} /></span>
+          <div>
+            <em>운용자 메모</em>
+            <h1>남겨진 글</h1>
+          </div>
+          <strong>{items.length}건</strong>
+        </header>
+        <div className="desktop-feedback-list">
+          {items.length > 0 ? items.map((item) => (
+            <article key={item.id}>
+              <div>
+                <strong>{item.contact || "익명 운용자"}</strong>
+                <time dateTime={item.createdAt}>{formatFeedbackDate(item.createdAt)}</time>
+              </div>
+              <p>{item.message}</p>
+              {item.path && <em>{item.path}</em>}
+            </article>
+          )) : (
+            <div className="desktop-feedback-empty">
+              <MessageSquare size={24} />
+              <strong>{loadStatus === "loading" ? "메모를 불러오는 중입니다" : "아직 남겨진 메모가 없습니다"}</strong>
+              <span>{loadStatus === "error" ? "서버 조회가 지연되어 로컬 임시 저장 목록만 표시합니다." : "오른쪽에서 첫 메모를 남길 수 있습니다."}</span>
+            </div>
+          )}
         </div>
-      </div>
+      </article>
+
       <form className="desktop-feedback-form" onSubmit={submit}>
+        <header>
+          <span><Send size={20} /></span>
+          <div>
+            <em>간단 입력</em>
+            <h2>메모 남기기</h2>
+          </div>
+        </header>
         <label>
-          <span>피드백 내용</span>
+          <span>내용</span>
           <textarea
             value={memo}
             onChange={(event) => {
@@ -2993,7 +3147,7 @@ function DesktopFeedbackPanel() {
           />
         </label>
         <label>
-          <span>연락/식별 메모</span>
+          <span>식별 메모</span>
           <input
             value={contact}
             onChange={(event) => setContact(event.target.value.slice(0, 80))}
@@ -3003,7 +3157,7 @@ function DesktopFeedbackPanel() {
         <div className="desktop-feedback-actions">
           <button type="submit" disabled={status === "sending"}>
             <Send size={17} />
-            {status === "sending" ? "저장 중" : "피드백 저장"}
+            {status === "sending" ? "저장 중" : "저장"}
           </button>
           <small>{memo.length}/1200</small>
         </div>
@@ -3013,6 +3167,54 @@ function DesktopFeedbackPanel() {
       </form>
     </section>
   );
+}
+
+async function fetchFeedbackItems() {
+  const response = await fetch("/api/feedback", { cache: "no-store" });
+  if (!response.ok) throw new Error("feedback list failed");
+  const body = await response.json() as { items?: unknown };
+  const items = Array.isArray(body.items) ? body.items : [];
+  return items.map(normalizeFeedbackItem).filter((item): item is FeedbackItem => Boolean(item));
+}
+
+function normalizeFeedbackItem(value: unknown): FeedbackItem | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Record<string, unknown>;
+  const message = String(item.message || "").trim();
+  if (!message) return null;
+  return {
+    id: String(item.id || `feedback-${Date.now()}`),
+    createdAt: String(item.createdAt || new Date().toISOString()),
+    message: message.slice(0, 1200),
+    contact: String(item.contact || "").trim().slice(0, 80) || undefined,
+    path: String(item.path || "").trim().slice(0, 200) || undefined,
+  };
+}
+
+function readLocalFeedbackItems() {
+  const storage = safeLocalStorage();
+  if (!storage) return [];
+
+  try {
+    const raw = JSON.parse(storage.getItem(DESKTOP_FEEDBACK_LOCAL_KEY) ?? "[]") as unknown;
+    if (!Array.isArray(raw)) return [];
+    return raw.map(normalizeFeedbackItem).filter((item): item is FeedbackItem => Boolean(item));
+  } catch {
+    return [];
+  }
+}
+
+function formatFeedbackDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "시간 확인 필요";
+  return date.toLocaleString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 function DesktopSettings({
