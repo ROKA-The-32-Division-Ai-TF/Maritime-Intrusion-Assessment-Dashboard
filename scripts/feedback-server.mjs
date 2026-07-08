@@ -1,0 +1,108 @@
+import { createServer } from "node:http";
+import { appendFile, mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
+
+const PORT = Number(process.env.FEEDBACK_PORT || 3810);
+const STORE_PATH = process.env.FEEDBACK_STORE_PATH || "/var/lib/baekryong-feedback/feedback.jsonl";
+const MAX_BODY_BYTES = 8 * 1024;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX = 8;
+const rateLimit = new Map();
+
+function json(res, statusCode, payload) {
+  res.writeHead(statusCode, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+  });
+  res.end(JSON.stringify(payload));
+}
+
+function clientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) return forwarded.split(",")[0].trim();
+  return req.socket.remoteAddress || "unknown";
+}
+
+function allowedByRateLimit(ip) {
+  const now = Date.now();
+  const current = rateLimit.get(ip) || [];
+  const recent = current.filter((time) => now - time < RATE_LIMIT_WINDOW_MS);
+  if (recent.length >= RATE_LIMIT_MAX) {
+    rateLimit.set(ip, recent);
+    return false;
+  }
+
+  recent.push(now);
+  rateLimit.set(ip, recent);
+  return true;
+}
+
+async function readBody(req) {
+  const chunks = [];
+  let size = 0;
+
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > MAX_BODY_BYTES) throw new Error("body_too_large");
+    chunks.push(chunk);
+  }
+
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+async function handlePost(req, res) {
+  const ip = clientIp(req);
+  if (!allowedByRateLimit(ip)) {
+    json(res, 429, { ok: false, error: "rate_limited" });
+    return;
+  }
+
+  let body;
+  try {
+    body = JSON.parse(await readBody(req));
+  } catch {
+    json(res, 400, { ok: false, error: "invalid_json" });
+    return;
+  }
+
+  const message = String(body.message || "").trim().slice(0, 1200);
+  if (!message) {
+    json(res, 400, { ok: false, error: "message_required" });
+    return;
+  }
+
+  const record = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: new Date().toISOString(),
+    ip,
+    path: String(body.path || "").slice(0, 200),
+    contact: String(body.contact || "").trim().slice(0, 80),
+    message,
+    userAgent: String(body.userAgent || req.headers["user-agent"] || "").slice(0, 300),
+  };
+
+  await mkdir(dirname(STORE_PATH), { recursive: true });
+  await appendFile(STORE_PATH, `${JSON.stringify(record)}\n`, { mode: 0o600 });
+  json(res, 200, { ok: true, id: record.id });
+}
+
+createServer(async (req, res) => {
+  try {
+    if (!req.url?.startsWith("/api/feedback")) {
+      json(res, 404, { ok: false, error: "not_found" });
+      return;
+    }
+
+    if (req.method === "POST") {
+      await handlePost(req, res);
+      return;
+    }
+
+    json(res, 405, { ok: false, error: "method_not_allowed" });
+  } catch {
+    json(res, 500, { ok: false, error: "server_error" });
+  }
+}).listen(PORT, "127.0.0.1", () => {
+  console.log(`Baekryong feedback server listening on 127.0.0.1:${PORT}`);
+});

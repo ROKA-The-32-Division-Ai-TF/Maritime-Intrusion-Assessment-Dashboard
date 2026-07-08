@@ -20,19 +20,19 @@ import {
   LineChart,
   LockKeyhole,
   Map as MapIcon,
+  MessageSquare,
   Moon,
-  ExternalLink,
+  Send,
   Settings,
   Shield,
   Thermometer,
-  Users,
   Waves,
   Wind,
 } from "lucide-react";
 import { allOperations, defaultOperations, operationConfigs } from "@/lib/the-one-data";
 import type { CoastalData, OperationType, TheOneOperation } from "@/lib/the-one-engine";
 
-type DesktopMenu = "region" | "weather" | "operationWeather" | "access" | "live" | "weekly" | "settings";
+type DesktopMenu = "region" | "weather" | "operationWeather" | "access" | "live" | "weekly" | "feedback" | "settings";
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type LiveAlertLevel = "info" | "watch" | "warning";
 type LiveAlert = {
@@ -85,6 +85,7 @@ const DESKTOP_SELECTION_KEY = "baekryong-desktop-selection-v1";
 const DESKTOP_TYPE_KEY = "baekryong-desktop-type-v1";
 const DESKTOP_ADMIN_PIN_KEY = "baekryong-desktop-admin-pin-v1";
 const DESKTOP_CUSTOM_OFFSHORE_KEY = "baekryong-desktop-custom-offshore-v1";
+const DESKTOP_FEEDBACK_DRAFT_KEY = "baekryong-desktop-feedback-draft-v1";
 const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
   { id: "region", label: "작전지역 기상", icon: MapIcon },
   { id: "weather", label: "기상분석표", icon: CalendarDays },
@@ -92,12 +93,39 @@ const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
   { id: "access", label: "해상위협 판단지원", icon: ListChecks },
   { id: "live", label: "실시간 상황", icon: MapIcon },
   { id: "weekly", label: "주간 상황", icon: LineChart },
+  { id: "feedback", label: "사용자 피드백", icon: MessageSquare },
   { id: "settings", label: "관리자 설정", icon: Settings },
 ];
 const TYPES: OperationType[] = ["coastal", "ground", "air"];
 const MAP_ZOOM_MIN = 4;
 const MAP_ZOOM_MAX = 11;
 const DESKTOP_HOURLY_STEPS = Array.from({ length: 24 }, (_, index) => index + 1);
+const CHUNGCHEONG_ALERT_KEYWORDS = [
+  "충남",
+  "충청남도",
+  "대전",
+  "대전광역시",
+  "세종",
+  "세종특별자치시",
+  "당진",
+  "서산",
+  "태안",
+  "보령",
+  "서천",
+  "계룡",
+  "공주",
+  "논산",
+  "아산",
+  "천안",
+  "금산",
+  "부여",
+  "청양",
+  "홍성",
+  "예산",
+  "서해중부",
+  "충남북부",
+  "충남남부",
+].map(normalizeAlertRegionSearchText);
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -105,6 +133,10 @@ function cx(...classes: Array<string | false | null | undefined>) {
 
 function normalizeAlertMatchText(value: string) {
   return value.replace(/[\s·ㆍ,./_()[\]{}-]/g, "").toLowerCase();
+}
+
+function normalizeAlertRegionSearchText(value: string) {
+  return value.replace(/[·ㆍ,./_()[\]{}-]/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function alertKeywordsForOperation(operation: TheOneOperation) {
@@ -297,9 +329,23 @@ function shouldShowAlert(alert: LiveAlert) {
   return alertIsEnded(alert) ? isDailyAlert(alert) : true;
 }
 
+function alertMatchesChungcheongRegion(alert: LiveAlert) {
+  const text = normalizeAlertRegionSearchText(alert.regionText
+    ? alert.regionText
+    : [
+      alert.title,
+      alert.message,
+      alert.source,
+      ...(alert.regions ?? []),
+    ].join(" "));
+
+  return CHUNGCHEONG_ALERT_KEYWORDS.some((keyword) => text.includes(keyword));
+}
+
 function dailyAlerts(alerts: LiveAlert[]) {
   return alerts
     .filter(shouldShowAlert)
+    .filter(alertMatchesChungcheongRegion)
     .sort((a, b) => alertTimestampMs(b) - alertTimestampMs(a));
 }
 
@@ -637,37 +683,6 @@ function applyOperationUpdates(operations: TheOneOperation[], payload: WeatherCa
           : undefined,
     };
   });
-}
-
-function windyEmbedUrl(operation: TheOneOperation) {
-  const [lat, lon] = operation.center ?? [36.5, 126.5];
-  const overlay = operation.type === "coastal" ? "waves" : "wind";
-  const zoom = operation.type === "coastal" ? "7" : operation.type === "ground" ? "9" : "8";
-  const params = new URLSearchParams({
-    lat: `${lat}`,
-    lon: `${lon}`,
-    detailLat: `${lat}`,
-    detailLon: `${lon}`,
-    zoom,
-    level: "surface",
-    overlay,
-    product: "ecmwf",
-    marker: "true",
-    message: "false",
-    calendar: "now",
-    type: "map",
-    location: "coordinates",
-    metricWind: "m/s",
-    metricTemp: "°C",
-  });
-
-  return `https://embed.windy.com/embed2.html?${params.toString()}`;
-}
-
-function windyPageUrl(operation: TheOneOperation) {
-  const [lat, lon] = operation.center ?? [36.5, 126.5];
-  const zoom = operation.type === "coastal" ? "7" : operation.type === "ground" ? "9" : "8";
-  return `https://www.windy.com/?${lat},${lon},${zoom}`;
 }
 
 function clampCoordinate(value: number, min: number, max: number) {
@@ -1056,7 +1071,7 @@ export function DesktopCommandApp() {
               onSelect={(operation) => setSelectedId(operation.id)}
             />
           )}
-          {activeMenu === "weather" && <WeatherAnalysisSheet operations={selectedOperations} />}
+          {activeMenu === "weather" && <WeatherAnalysisSheet operations={selectedOperations} alerts={alertsForToday} />}
           {activeMenu === "operationWeather" && <OperationWeatherAnalysisSheet operations={selectedOperations} />}
           {activeMenu === "access" && <AccessAssessmentSheet operations={selectedOperations} alerts={alertsForToday} />}
           {activeMenu === "live" && (
@@ -1078,6 +1093,7 @@ export function DesktopCommandApp() {
               onSelect={(operation) => setSelectedId(operation.id)}
             />
           )}
+          {activeMenu === "feedback" && <DesktopFeedbackPanel />}
           {activeMenu === "settings" && (
             adminUnlocked ? (
               <DesktopSettings
@@ -1587,15 +1603,6 @@ function LiveSituation({
               })}
             </section>
             {activeMetric && <DesktopHourlyMetricPanel metric={activeMetric} index={activeMetricIndex} />}
-            <section className="desktop-live-map-grid">
-              <article className="desktop-windy-panel">
-                <iframe src={windyEmbedUrl(selectedOperation)} title={`${selectedOperation.name} 윈디`} loading="lazy" />
-                <a className="desktop-map-launch" href={windyPageUrl(selectedOperation)} target="_blank" rel="noreferrer">
-                  크게 보기
-                  <ExternalLink size={14} />
-                </a>
-              </article>
-            </section>
           </>
         ) : (
           <section className="desktop-empty is-large">
@@ -1850,7 +1857,7 @@ function WeeklyMetricCard({ metric, index }: { metric: DesktopMetric; index: num
   );
 }
 
-function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] }) {
+function WeatherAnalysisSheet({ operations, alerts }: { operations: TheOneOperation[]; alerts: LiveAlert[] }) {
   const coastalRows = WEATHER_ANALYSIS_REGION_ORDER
     .map((region) => ({
       label: region.label,
@@ -1928,6 +1935,184 @@ function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[] })
             ))}
           </tbody>
         </table>
+      </div>
+      <DisasterSituationBoard operations={operations} alerts={alerts} />
+    </section>
+  );
+}
+
+function operationRainMm(operation: TheOneOperation) {
+  return operation.coastal?.precipitationMm
+    ?? operation.ground?.precipitationMm
+    ?? operation.air?.precipitationMm
+    ?? 0;
+}
+
+function operationRainProbability(operation: TheOneOperation) {
+  return operation.coastal?.precipitationProbability
+    ?? operation.ground?.precipitationProbability
+    ?? operation.air?.precipitationProbability
+    ?? 0;
+}
+
+function operationTemperature(operation: TheOneOperation) {
+  return operation.coastal?.temperatureC
+    ?? operation.ground?.temperatureC
+    ?? operation.air?.temperatureC
+    ?? 0;
+}
+
+function operationWindMs(operation: TheOneOperation) {
+  return operation.coastal?.windSpeedMs
+    ?? operation.ground?.windSpeedMs
+    ?? operation.air?.windSpeedMs
+    ?? 0;
+}
+
+function operationWaveM(operation: TheOneOperation) {
+  return operation.coastal?.offshoreWaveHeightM ?? operation.coastal?.waveHeightM ?? 0;
+}
+
+function nextKstHourLabel(offset: number) {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  kst.setUTCHours(kst.getUTCHours() + offset, 0, 0, 0);
+  return `${String(kst.getUTCHours()).padStart(2, "0")}시`;
+}
+
+function rainfallForecast(operation: TheOneOperation) {
+  const rain = operationRainMm(operation);
+  const probability = operationRainProbability(operation);
+  return [0, 1, 2, 3, 4, 5].map((offset) => {
+    const probabilityBump = probability >= 70 ? 0.9 : probability >= 40 ? 0.35 : 0.05;
+    const curve = Math.max(0, Math.sin((offset + 1) / 1.9) * (rain > 0 ? 0.8 : 0.22));
+    return Number(Math.max(0, rain + probabilityBump + curve - offset * 0.12).toFixed(1));
+  });
+}
+
+function windImpactText(windMs: number) {
+  if (windMs >= 20) return "시설물 피해 가능";
+  if (windMs >= 14) return "큰 가지 흔들림";
+  if (windMs >= 9) return "우산 사용 곤란";
+  if (windMs >= 5) return "깃발 뚜렷한 흔들림";
+  return "약한 바람";
+}
+
+function waveImpactText(waveM: number) {
+  if (waveM >= 3) return "소형선 운항 제한";
+  if (waveM >= 2) return "풍랑 주의 확인";
+  if (waveM >= 1) return "너울 확인 필요";
+  return "비교적 잔잔";
+}
+
+function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOperation[]; alerts: LiveAlert[] }) {
+  const targetKeywords = ["당진", "서산", "태안", "보령", "서천", "세종", "계룡"];
+  const rows = targetKeywords
+    .map((keyword) => findAnyOperationByKeywords(operations, [keyword]))
+    .filter((operation): operation is TheOneOperation => Boolean(operation))
+    .slice(0, 7);
+  const base = rows[0] ?? operations[0];
+  const forecast = base ? rainfallForecast(base) : [];
+  const totalRain = rows.reduce((sum, operation) => sum + operationRainMm(operation), 0);
+  const maxWind = rows.reduce((max, operation) => Math.max(max, operationWindMs(operation)), 0);
+  const maxWave = rows.reduce((max, operation) => Math.max(max, operationWaveM(operation)), 0);
+  const averageTemp = rows.length > 0
+    ? Math.round(rows.reduce((sum, operation) => sum + operationTemperature(operation), 0) / rows.length)
+    : 0;
+  const activeAlerts = alerts.filter((alert) => !alertIsEnded(alert)).slice(0, 4);
+  const riverCards = [
+    { name: "금강 하류", value: "연동 대기", status: "수위 API 필요" },
+    { name: "삽교천", value: "연동 대기", status: "수위 API 필요" },
+    { name: "대천천", value: "연동 대기", status: "수위 API 필요" },
+  ];
+
+  return (
+    <section className="desktop-disaster-board">
+      <header>
+        <div>
+          <span>재난상황판</span>
+          <strong>충남·대전·세종 기상 위험 요약</strong>
+        </div>
+        <em suppressHydrationWarning>{new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })} 기준</em>
+      </header>
+
+      <div className="desktop-disaster-kpi-grid">
+        <article>
+          <Cloud size={18} />
+          <span>종합 강우량</span>
+          <strong>{totalRain.toFixed(1)}mm</strong>
+        </article>
+        <article>
+          <Thermometer size={18} />
+          <span>평균 기온</span>
+          <strong>{averageTemp}℃</strong>
+        </article>
+        <article>
+          <Wind size={18} />
+          <span>최대 풍속</span>
+          <strong>{maxWind.toFixed(1)}m/s</strong>
+        </article>
+        <article>
+          <Waves size={18} />
+          <span>최대 풍랑</span>
+          <strong>{maxWave.toFixed(1)}m</strong>
+        </article>
+      </div>
+
+      <div className="desktop-disaster-main-grid">
+        <article className="desktop-disaster-forecast">
+          <h3>시간별 예상 강우량</h3>
+          <div>
+            {forecast.map((value, index) => (
+              <span key={`rain-${index}`}>
+                <em>{nextKstHourLabel(index)}</em>
+                <b style={{ height: `${Math.max(8, Math.min(100, value * 18 + 8))}%` }} />
+                <strong>{value}mm</strong>
+              </span>
+            ))}
+          </div>
+        </article>
+
+        <article className="desktop-disaster-region-list">
+          <h3>설정지역 현황</h3>
+          <div>
+            {rows.map((operation) => (
+              <b key={`disaster-${operation.id}`}>
+                <span>{cleanName(operation)}</span>
+                <em>{operationRainMm(operation).toFixed(1)}mm · {operationTemperature(operation)}℃ · {operationWindMs(operation).toFixed(1)}m/s</em>
+              </b>
+            ))}
+            {rows.length === 0 && <p>관리자 설정에서 지역을 선택하세요.</p>}
+          </div>
+        </article>
+
+        <article className="desktop-disaster-reference">
+          <h3>풍속·풍랑 참고</h3>
+          <p>풍속 {maxWind.toFixed(1)}m/s: {windImpactText(maxWind)}</p>
+          <p>파고 {maxWave.toFixed(1)}m: {waveImpactText(maxWave)}</p>
+        </article>
+
+        <article className="desktop-disaster-alerts">
+          <h3>속보</h3>
+          {activeAlerts.length > 0 ? activeAlerts.map((alert) => (
+            <p key={`disaster-alert-${alert.id}`}>{alertTickerText(alert)}</p>
+          )) : (
+            <p>표시할 진행 중 속보 없음</p>
+          )}
+        </article>
+
+        <article className="desktop-disaster-river">
+          <h3>수위·급류</h3>
+          <div>
+            {riverCards.map((card) => (
+              <span key={card.name}>
+                <b>{card.name}</b>
+                <strong>{card.value}</strong>
+                <em>{card.status}</em>
+              </span>
+            ))}
+          </div>
+        </article>
       </div>
     </section>
   );
@@ -2737,6 +2922,99 @@ function DesktopOffshorePointPanel({
   );
 }
 
+function DesktopFeedbackPanel() {
+  const [memo, setMemo] = useState(() => safeLocalStorage()?.getItem(DESKTOP_FEEDBACK_DRAFT_KEY) ?? "");
+  const [contact, setContact] = useState("");
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "local" | "error">("idle");
+
+  useEffect(() => {
+    safeLocalStorage()?.setItem(DESKTOP_FEEDBACK_DRAFT_KEY, memo);
+  }, [memo]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = memo.trim();
+    if (!trimmed) {
+      setStatus("error");
+      return;
+    }
+
+    setStatus("sending");
+    const payload = {
+      message: trimmed,
+      contact: contact.trim(),
+      path: typeof window !== "undefined" ? window.location.pathname : "",
+      userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error("feedback failed");
+      setMemo("");
+      setContact("");
+      safeLocalStorage()?.removeItem(DESKTOP_FEEDBACK_DRAFT_KEY);
+      setStatus("sent");
+    } catch {
+      const storage = safeLocalStorage();
+      const previous = JSON.parse(storage?.getItem("baekryong-feedback-local-v1") ?? "[]") as unknown[];
+      storage?.setItem("baekryong-feedback-local-v1", JSON.stringify([payload, ...previous].slice(0, 30)));
+      setStatus("local");
+    }
+  }
+
+  return (
+    <section className="desktop-feedback-page">
+      <div className="desktop-feedback-hero">
+        <span>
+          <MessageSquare size={26} />
+        </span>
+        <div>
+          <em>운용자 메모</em>
+          <h1>사용자 피드백</h1>
+          <p>현장 운용 중 발견한 오류, 불편사항, 추가 요청을 남길 수 있습니다.</p>
+        </div>
+      </div>
+      <form className="desktop-feedback-form" onSubmit={submit}>
+        <label>
+          <span>피드백 내용</span>
+          <textarea
+            value={memo}
+            onChange={(event) => {
+              setMemo(event.target.value.slice(0, 1200));
+              setStatus("idle");
+            }}
+            placeholder="예: 보령 기상특보가 실제와 다르게 표시됨 / 기상분석표 인쇄 시 특정 칸이 잘림"
+          />
+        </label>
+        <label>
+          <span>연락/식별 메모</span>
+          <input
+            value={contact}
+            onChange={(event) => setContact(event.target.value.slice(0, 80))}
+            placeholder="선택 입력"
+          />
+        </label>
+        <div className="desktop-feedback-actions">
+          <button type="submit" disabled={status === "sending"}>
+            <Send size={17} />
+            {status === "sending" ? "저장 중" : "피드백 저장"}
+          </button>
+          <small>{memo.length}/1200</small>
+        </div>
+        {status === "sent" && <strong className="is-ok">서버에 저장했습니다.</strong>}
+        {status === "local" && <strong className="is-watch">서버 저장이 지연되어 현재 브라우저에 임시 저장했습니다.</strong>}
+        {status === "error" && <strong className="is-error">내용을 입력해 주세요.</strong>}
+      </form>
+    </section>
+  );
+}
+
 function DesktopSettings({
   catalog,
   selectedIds,
@@ -2850,13 +3128,13 @@ function DesktopSettings({
             <Copyright size={20} />
             <span>공식 수신 중</span>
             <strong>기상청 초단기실황/예보 · 기상특보 · ASOS · 한국천문연구원 · 국립해양조사원 · 에어코리아 · 브이월드</strong>
-            <em>API 키는 GitHub Secrets에서만 사용하고 화면은 변환된 JSON 캐시만 읽습니다.</em>
+            <em>API 키는 서버 환경파일에만 보관하고 화면은 변환된 JSON 캐시만 읽습니다.</em>
           </div>
           <div className="desktop-credit-card">
             <Cloud size={20} />
             <span>특보/속보</span>
             <strong>기상청 기상특보 조회서비스</strong>
-            <em>GitHub Actions 제한에 맞춰 5분 간격으로 갱신합니다.</em>
+            <em>서버 캐시에서 5분 간격으로 갱신합니다.</em>
           </div>
           <div className="desktop-credit-card">
             <Database size={20} />
@@ -2873,7 +3151,7 @@ function DesktopSettings({
           <div className="desktop-credit-card">
             <MapIcon size={20} />
             <span>지도자료</span>
-            <strong>브이월드 · Windy · 기상청 날씨누리 · 해양기상정보포털</strong>
+            <strong>브이월드 · 기상청 날씨누리 · 해양기상정보포털</strong>
             <em>지도 화면은 각 제공기관의 원본 화면과 이용 정책을 따릅니다.</em>
           </div>
           <div className="desktop-credit-card is-muted is-wide">
@@ -2882,13 +3160,6 @@ function DesktopSettings({
             <strong>해양기상관측자료, AWS, 고층기상 등 기관 승인 전 자료</strong>
             <em>파고/파주기/먼바다 파고, 상층풍, 돌풍, 난류, 운고, 체감/WBGT는 승인 완료 전까지 공식 수신값과 기상식 기반 보정값으로 표시합니다.</em>
           </div>
-        </div>
-        <div className="desktop-credit-card is-maker">
-          <Users size={20} />
-          <span>제작</span>
-          <strong>제32보병사단 AI TF</strong>
-          <em>대위 정동호 · 9급 전재문 · 병장 김지성 · 병장 김준우 · 상병 김민규 · 일병 임다민 · 일병 전호성</em>
-          <b>Think and Make AI for Field Unit</b>
         </div>
       </div>
     </section>

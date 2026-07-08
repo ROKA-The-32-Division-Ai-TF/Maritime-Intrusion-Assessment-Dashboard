@@ -1371,38 +1371,6 @@ function OperationDetailTabs({
   );
 }
 
-function windyEmbedUrl(operation: TheOneOperation) {
-  const [lat, lon] = operation.center ?? [36.5, 126.5];
-  const overlay = operation.type === "coastal" ? "waves" : operation.type === "air" ? "wind" : "rain";
-  const zoom = operation.type === "coastal" ? "7" : "8";
-  const params = new URLSearchParams({
-    lat: `${lat}`,
-    lon: `${lon}`,
-    detailLat: `${lat}`,
-    detailLon: `${lon}`,
-    zoom,
-    level: "surface",
-    overlay,
-    product: "ecmwf",
-    marker: "true",
-    message: "true",
-    calendar: "now",
-    type: "map",
-    location: "coordinates",
-    metricWind: "m/s",
-    metricTemp: "°C",
-  });
-
-  return `https://embed.windy.com/embed2.html?${params.toString()}`;
-}
-
-function windyOpenUrl(operation: TheOneOperation) {
-  const [lat, lon] = operation.center ?? [36.5, 126.5];
-  const zoom = operation.type === "coastal" ? 7 : 8;
-
-  return `https://www.windy.com/?${lat},${lon},${zoom}`;
-}
-
 function kmaMapUrl(operation: TheOneOperation) {
   return operation.type === "coastal" ? KMA_MARINE_MAP_URL : KMA_WEATHER_MAP_URL;
 }
@@ -1410,22 +1378,12 @@ function kmaMapUrl(operation: TheOneOperation) {
 function LiveMapPanel({ operation }: { operation: TheOneOperation }) {
   const primaryKmaUrl = kmaMapUrl(operation);
   const quickLinks = [
-    { label: "윈디", helper: "파고·바람·강수", href: windyOpenUrl(operation), icon: operation.type === "coastal" ? Waves : Wind },
     { label: operation.type === "coastal" ? "해양기상" : "기상청 지도", helper: operation.type === "coastal" ? "특보·관측·CCTV" : "레이더·특보·관측", href: primaryKmaUrl, icon: Cloud },
     { label: "관측 확인", helper: operation.type === "coastal" ? "항구·해수욕장" : "지역 관측망", href: KMA_WEATHER_MAP_URL, icon: Eye },
   ];
 
   return (
     <section className="live-map-stack">
-      <article className="live-map-card">
-        <div className="live-map-head">
-          <span>윈디</span>
-          <a href={windyOpenUrl(operation)} target="_blank" rel="noreferrer">새창</a>
-        </div>
-        <div className="live-map-frame is-windy">
-          <iframe src={windyEmbedUrl(operation)} title={`${operation.name} 윈디 지도`} loading="lazy" allowFullScreen />
-        </div>
-      </article>
       <article className="live-map-card">
         <div className="live-map-head">
           <span>{operation.type === "coastal" ? "기상청 해양기상" : "기상청 지도"}</span>
@@ -1629,8 +1587,6 @@ function SettingsScreen({ operations, onReset }: { operations: TheOneOperation[]
     },
   ];
   const replacementItems = ["파고/파주기/먼바다 파고", "상층풍/돌풍/난류/운고", "체감/WBGT", "기관 승인 전 지점 관측값"];
-  const creators = ["대위 정동호", "9급 전재문", "병장 김지성", "병장 김준우", "상병 김민규", "일병 임다민", "일병 전호성"];
-
   return (
     <div className="screen-stack">
       <SectionTitle title="설정" />
@@ -1674,22 +1630,11 @@ function SettingsScreen({ operations, onReset }: { operations: TheOneOperation[]
         <div className="api-flow">
           <span>공공 API</span>
           <b />
-          <span>Actions 변환</span>
+          <span>서버 캐시</span>
           <b />
-          <span>JSON 캐시</span>
+          <span>JSON 변환</span>
           <b />
           <span>화면 반영</span>
-        </div>
-      </section>
-      <section className="panel-card creator-card">
-        <img src={assetUrl("22.svg")} alt="" />
-        <span>32사단 AI TF</span>
-        <h3>Baekryong Field AI Lab</h3>
-        <p>Think and Make AI for Field Units</p>
-        <div className="creator-list">
-          {creators.map((creator) => (
-            <em key={creator}>{creator}</em>
-          ))}
         </div>
       </section>
     </div>
