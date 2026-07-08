@@ -32,7 +32,7 @@ import {
 import { allOperations, defaultOperations, operationConfigs } from "@/lib/the-one-data";
 import type { CoastalData, OperationType, TheOneOperation } from "@/lib/the-one-engine";
 
-type DesktopMenu = "region" | "weather" | "operationWeather" | "access" | "live" | "weekly" | "feedback" | "settings";
+type DesktopMenu = "region" | "weather" | "operationWeather" | "access" | "live" | "weekly" | "disaster" | "feedback" | "settings";
 type IconType = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 type LiveAlertLevel = "info" | "watch" | "warning";
 type LiveAlert = {
@@ -80,18 +80,13 @@ type FeedbackItem = {
   contact?: string;
   path?: string;
 };
-type OffshorePointInput = {
-  name: string;
-  latitude: number;
-  longitude: number;
-};
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const VWORLD_API_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY ?? "";
-const DESKTOP_SELECTION_KEY = "baekryong-desktop-selection-v1";
+const DESKTOP_LEGACY_SELECTION_KEY = "baekryong-desktop-selection-v1";
+const DESKTOP_AIR_SELECTION_KEY = "baekryong-desktop-air-selection-v1";
 const DESKTOP_TYPE_KEY = "baekryong-desktop-type-v1";
 const DESKTOP_ADMIN_PIN_KEY = "baekryong-desktop-admin-pin-v1";
-const DESKTOP_CUSTOM_OFFSHORE_KEY = "baekryong-desktop-custom-offshore-v1";
 const DESKTOP_FEEDBACK_DRAFT_KEY = "baekryong-desktop-feedback-draft-v1";
 const DESKTOP_FEEDBACK_LOCAL_KEY = "baekryong-feedback-local-v1";
 const MENUS: Array<{ id: DesktopMenu; label: string; icon: IconType }> = [
@@ -135,6 +130,42 @@ const CHUNGCHEONG_ALERT_KEYWORDS = [
   "서해중부",
   "충남북부",
   "충남남부",
+].map(normalizeAlertRegionSearchText);
+const TEMPORARY_FIXED_REGION_KEYWORDS = [
+  "충남",
+  "충청남도",
+  "대전",
+  "대전광역시",
+  "세종",
+  "세종특별자치시",
+  "서산",
+  "당진",
+  "태안",
+  "보령",
+  "서천",
+  "계룡",
+  "공주",
+  "논산",
+  "아산",
+  "천안",
+  "금산",
+  "부여",
+  "청양",
+  "홍성",
+  "예산",
+  "대산",
+  "해미",
+  "유성",
+  "장고항",
+  "안흥",
+  "만리포",
+  "꽃지",
+  "대천",
+  "장항",
+  "홍원",
+  "마량",
+  "무창포",
+  "삽시도",
 ].map(normalizeAlertRegionSearchText);
 
 function cx(...classes: Array<string | false | null | undefined>) {
@@ -222,6 +253,20 @@ function operationMatchesKeywords(operation: TheOneOperation, keywords: string[]
   const text = `${operation.id} ${operation.name} ${operation.area}`;
   return keywords.some((keyword) => text.includes(keyword));
 }
+
+function operationBelongsToTemporaryFixedRegion(operation: TheOneOperation) {
+  const searchText = normalizeAlertRegionSearchText(`${operation.id} ${operation.name} ${operation.area ?? ""}`);
+  return TEMPORARY_FIXED_REGION_KEYWORDS.some((keyword) => searchText.includes(keyword));
+}
+
+function uniqueOperations(operations: TheOneOperation[]) {
+  return [...new Map(operations.map((operation) => [operation.id, operation])).values()];
+}
+
+// 정식 지역관리 기능을 열기 전까지 해안/육상은 충남·대전·세종권으로 고정하고, 공중만 관리자 설정에서 조정한다.
+const DEFAULT_AIR_SELECTION_IDS = allOperations
+  .filter((operation) => operation.type === "air" && operationBelongsToTemporaryFixedRegion(operation))
+  .map((operation) => operation.id);
 
 function findOperationByKeywords(
   operations: TheOneOperation[],
@@ -695,54 +740,6 @@ function applyOperationUpdates(operations: TheOneOperation[], payload: WeatherCa
   });
 }
 
-function clampCoordinate(value: number, min: number, max: number) {
-  if (!Number.isFinite(value)) return null;
-  return Math.min(max, Math.max(min, value));
-}
-
-function createCustomOffshoreOperation(input: OffshorePointInput): TheOneOperation {
-  const latitude = clampCoordinate(input.latitude, -90, 90);
-  const longitude = clampCoordinate(input.longitude, -180, 180);
-  if (latitude === null || longitude === null) {
-    throw new Error("위도와 경도를 숫자로 입력해 주세요.");
-  }
-
-  const seed = allOperations.find((operation) => operation.type === "coastal" && operation.area.includes("원해"))
-    ?? allOperations.find((operation) => operation.type === "coastal");
-  if (!seed?.coastal || !seed.coastalEnvironment) throw new Error("원해 기준 관측점이 없습니다.");
-
-  const operation = structuredClone(seed);
-  const coordinateFactor = Math.abs(Math.sin((latitude * 1.37 + longitude * 0.91) * Math.PI / 180));
-  const waveBump = Number((0.25 + coordinateFactor * 0.55).toFixed(1));
-  const windBump = Number((0.5 + coordinateFactor * 1.4).toFixed(1));
-  const visibilityDrop = Number((coordinateFactor * 1.6).toFixed(1));
-  const name = input.name.trim() || `원해 좌표 ${latitude.toFixed(3)}, ${longitude.toFixed(3)}`;
-
-  operation.id = `coastal-custom-offshore-${Date.now()}-${Math.round(Math.abs(latitude * 1000 + longitude * 1000))}`;
-  operation.name = name;
-  operation.area = `사용자 지정 원해 · ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
-  operation.datetime = "사용자 지정 원해 좌표";
-  operation.center = [latitude, longitude];
-  operation.imageTone = "blue";
-  const coastal = operation.coastal;
-  const environment = operation.coastalEnvironment;
-  if (!coastal || !environment) return operation;
-
-  coastal.waveHeightM = Number((seed.coastal.waveHeightM + waveBump).toFixed(1));
-  coastal.nearshoreWaveHeightM = coastal.waveHeightM;
-  coastal.offshoreWaveHeightM = Number((coastal.waveHeightM + 0.5).toFixed(1));
-  coastal.windSpeedMs = Number((seed.coastal.windSpeedMs + windBump).toFixed(1));
-  coastal.surfaceWindMs = coastal.windSpeedMs;
-  coastal.upperWindSpeedMs = Number((coastal.windSpeedMs * 1.45 + 1.8).toFixed(1));
-  coastal.visibilityKm = Number(Math.max(0.5, seed.coastal.visibilityKm - visibilityDrop).toFixed(1));
-  coastal.weatherAlert = coastal.waveHeightM >= 2 || coastal.windSpeedMs >= 12 ? "풍랑/강풍 확인" : "없음";
-  environment.waveHeightM = coastal.waveHeightM;
-  environment.windSpeedMs = coastal.windSpeedMs;
-  environment.visibilityKm = coastal.visibilityKm;
-
-  return operation;
-}
-
 function desktopMetrics(operation: TheOneOperation): DesktopMetric[] {
   if (operation.type === "coastal" && operation.coastal) {
     const data = operation.coastal;
@@ -924,35 +921,31 @@ export function DesktopCommandApp() {
   const clock = useKstClock();
   const [activeMenu, setActiveMenu] = useState<DesktopMenu>("region");
   const [activeType, setActiveType] = useState<OperationType>("coastal");
-  const [selectedIds, setSelectedIds] = useState<string[]>(defaultOperations.map((operation) => operation.id));
+  const [selectedIds, setSelectedIds] = useState<string[]>(DEFAULT_AIR_SELECTION_IDS);
   const [selectedId, setSelectedId] = useState(defaultOperations[0]?.id ?? "");
   const [adminPin, setAdminPin] = useState("0000");
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [customOffshoreOperations, setCustomOffshoreOperations] = useState<TheOneOperation[]>([]);
 
   useEffect(() => {
     queueMicrotask(() => {
       const storage = safeLocalStorage();
       try {
-        const storedIds = JSON.parse(storage?.getItem(DESKTOP_SELECTION_KEY) ?? "null") as string[] | null;
+        const storedIds = JSON.parse(storage?.getItem(DESKTOP_AIR_SELECTION_KEY) ?? "null") as string[] | null;
         const storedType = storage?.getItem(DESKTOP_TYPE_KEY) as OperationType | null;
         const storedPin = storage?.getItem(DESKTOP_ADMIN_PIN_KEY);
-        const storedOffshore = JSON.parse(storage?.getItem(DESKTOP_CUSTOM_OFFSHORE_KEY) ?? "[]") as TheOneOperation[];
 
         if (Array.isArray(storedIds)) {
-          setSelectedIds(storedIds);
-          setSelectedId(storedIds[0] ?? "");
+          const storedAirIds = storedIds.filter((id) => DEFAULT_AIR_SELECTION_IDS.includes(id));
+          setSelectedIds(storedAirIds.length > 0 ? storedAirIds : DEFAULT_AIR_SELECTION_IDS);
         }
 
+        storage?.removeItem(DESKTOP_LEGACY_SELECTION_KEY);
         if (storedType && TYPES.includes(storedType)) setActiveType(storedType);
         if (storedPin && /^\d{4}$/.test(storedPin)) setAdminPin(storedPin);
-        if (Array.isArray(storedOffshore)) {
-          setCustomOffshoreOperations(storedOffshore.filter((operation) => operation?.type === "coastal" && operation.id?.startsWith("coastal-custom-offshore-")));
-        }
       } catch {
-        storage?.removeItem(DESKTOP_SELECTION_KEY);
-        storage?.removeItem(DESKTOP_CUSTOM_OFFSHORE_KEY);
+        storage?.removeItem(DESKTOP_AIR_SELECTION_KEY);
+        storage?.removeItem(DESKTOP_LEGACY_SELECTION_KEY);
       } finally {
         setLoaded(true);
       }
@@ -962,22 +955,25 @@ export function DesktopCommandApp() {
   useEffect(() => {
     if (!loaded) return;
     const storage = safeLocalStorage();
-    storage?.setItem(DESKTOP_SELECTION_KEY, JSON.stringify(selectedIds));
+    storage?.setItem(DESKTOP_AIR_SELECTION_KEY, JSON.stringify(selectedIds.filter((id) => DEFAULT_AIR_SELECTION_IDS.includes(id))));
     storage?.setItem(DESKTOP_TYPE_KEY, activeType);
   }, [activeType, loaded, selectedIds]);
 
-  useEffect(() => {
-    if (!loaded) return;
-    safeLocalStorage()?.setItem(DESKTOP_CUSTOM_OFFSHORE_KEY, JSON.stringify(customOffshoreOperations));
-  }, [customOffshoreOperations, loaded]);
-
-  const fullCatalog = useMemo(
-    () => [...catalog, ...customOffshoreOperations],
-    [catalog, customOffshoreOperations],
+  const fullCatalog = catalog;
+  const fixedRegionalOperations = useMemo(
+    () => fullCatalog.filter((operation) => operationBelongsToTemporaryFixedRegion(operation)),
+    [fullCatalog],
+  );
+  const configurableAirOperations = useMemo(
+    () => fixedRegionalOperations.filter((operation) => operation.type === "air"),
+    [fixedRegionalOperations],
   );
   const selectedOperations = useMemo(
-    () => fullCatalog.filter((operation) => selectedIds.includes(operation.id)),
-    [fullCatalog, selectedIds],
+    () => uniqueOperations([
+      ...fixedRegionalOperations.filter((operation) => operation.type !== "air"),
+      ...configurableAirOperations.filter((operation) => selectedIds.includes(operation.id)),
+    ]),
+    [configurableAirOperations, fixedRegionalOperations, selectedIds],
   );
   const activeOperations = useMemo(
     () => selectedOperations.filter((operation) => operation.type === activeType),
@@ -997,14 +993,15 @@ export function DesktopCommandApp() {
   }
 
   function handleToggle(id: string) {
+    if (!configurableAirOperations.some((operation) => operation.id === id)) return;
     setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
     setSelectedId(id);
   }
 
   function handleDefault() {
-    const ids = defaultOperations.map((operation) => operation.id);
+    const ids = configurableAirOperations.map((operation) => operation.id);
     setSelectedIds(ids);
-    setSelectedId(ids[0] ?? "");
+    setSelectedId(selectedOperations.find((operation) => operation.type === "coastal")?.id ?? ids[0] ?? "");
     setActiveType("coastal");
   }
 
@@ -1019,24 +1016,6 @@ export function DesktopCommandApp() {
   function handleAdminPinChange(nextPin: string) {
     setAdminPin(nextPin);
     safeLocalStorage()?.setItem(DESKTOP_ADMIN_PIN_KEY, nextPin);
-  }
-
-  function handleAddOffshorePoint(input: OffshorePointInput) {
-    const operation = createCustomOffshoreOperation(input);
-    setCustomOffshoreOperations((current) => [...current, operation]);
-    setSelectedIds((current) => [...new Set([...current, operation.id])]);
-    setActiveType("coastal");
-    setSelectedId(operation.id);
-  }
-
-  function handleRemoveCustomOffshorePoint(id: string) {
-    setCustomOffshoreOperations((current) => current.filter((operation) => operation.id !== id));
-    setSelectedIds((current) => current.filter((operationId) => operationId !== id));
-    if (selectedId === id) {
-      const fallback = selectedOperations.find((operation) => operation.id !== id && operation.type === "coastal")
-        ?? fullCatalog.find((operation) => operation.id !== id && operation.type === "coastal");
-      setSelectedId(fallback?.id ?? "");
-    }
   }
 
   return (
@@ -1055,6 +1034,18 @@ export function DesktopCommandApp() {
           <strong suppressHydrationWarning>{clock.time}</strong>
           <em suppressHydrationWarning>{clock.date}</em>
         </div>
+        <button
+          type="button"
+          className={cx("desktop-side-disaster-banner", activeMenu === "disaster" && "is-active")}
+          onClick={() => setActiveMenu("disaster")}
+        >
+          <span><Cloud size={22} /></span>
+          <div>
+            <strong>재난상황판</strong>
+            <em>강우 · 풍속 · 속보</em>
+          </div>
+          <b>LIVE</b>
+        </button>
         <nav className="desktop-menu" aria-label="데스크톱 메뉴">
           {MENUS.map((item) => {
             const Icon = item.icon;
@@ -1069,7 +1060,6 @@ export function DesktopCommandApp() {
       </aside>
       <main className={cx("desktop-main", activeMenu === "settings" && "is-settings")}>
         <DesktopNewsTicker alerts={alertsForToday} />
-        <DisasterSituationBanner operations={selectedOperations} alerts={alertsForToday} />
         <div className="desktop-content">
           {activeMenu === "region" && (
             <OperationRegionStatus
@@ -1104,31 +1094,27 @@ export function DesktopCommandApp() {
               onSelect={(operation) => setSelectedId(operation.id)}
             />
           )}
+          {activeMenu === "disaster" && <DisasterSituationBoard operations={selectedOperations} alerts={alertsForToday} />}
           {activeMenu === "feedback" && <DesktopFeedbackPanel />}
           {activeMenu === "settings" && (
             adminUnlocked ? (
               <DesktopSettings
                 catalog={fullCatalog}
                 selectedIds={selectedIds}
-                activeType={activeType}
                 adminPin={adminPin}
-                customOffshoreOperations={customOffshoreOperations}
-                onTypeChange={setActiveType}
                 onToggle={handleToggle}
                 onClear={() => {
-                  if (!window.confirm("선택한 지역을 모두 초기화할까요?")) return;
-                  setSelectedIds([]);
-                  setSelectedId("");
+                  if (!window.confirm("공중기상 선택을 초기화할까요? 해안·육상은 충남·대전·세종권 고정 운용됩니다.")) return;
+                  setSelectedIds(DEFAULT_AIR_SELECTION_IDS);
+                  setSelectedId(selectedOperations.find((operation) => operation.type === "coastal")?.id ?? "");
                 }}
                 onDefault={handleDefault}
                 onSelectAllType={() => {
-                  const ids = fullCatalog.filter((operation) => operation.type === activeType).map((operation) => operation.id);
-                  setSelectedIds((current) => [...new Set([...current, ...ids])]);
+                  const ids = configurableAirOperations.map((operation) => operation.id);
+                  setSelectedIds(ids);
                   setSelectedId(ids[0] ?? "");
                 }}
                 onChangePin={handleAdminPinChange}
-                onAddOffshorePoint={handleAddOffshorePoint}
-                onRemoveCustomOffshorePoint={handleRemoveCustomOffshorePoint}
                 onLock={() => setAdminUnlocked(false)}
               />
             ) : (
@@ -1227,42 +1213,6 @@ function AlertModalColumn({ title, alerts, empty }: { title: string; alerts: Liv
         )}
       </div>
     </div>
-  );
-}
-
-function DisasterSituationBanner({ operations, alerts }: { operations: TheOneOperation[]; alerts: LiveAlert[] }) {
-  const rows = disasterSituationRows(operations);
-  const activeAlerts = alerts.filter((alert) => !alertIsEnded(alert));
-  const totalRain = rows.reduce((sum, operation) => sum + operationRainMm(operation), 0);
-  const maxWind = rows.reduce((max, operation) => Math.max(max, operationWindMs(operation)), 0);
-  const peakHourlyRain = rows.reduce((max, operation) => Math.max(max, ...rainfallForecast(operation)), 0);
-  const movingItems = rows.length > 0
-    ? rows.map((operation) => `${cleanName(operation)} ${operationRainMm(operation).toFixed(1)}mm · ${operationTemperature(operation)}℃ · ${operationWindMs(operation).toFixed(1)}m/s`)
-    : ["관리자 설정에서 지역을 선택하면 재난상황판이 활성화됩니다"];
-
-  return (
-    <section className="desktop-disaster-banner" aria-label="재난상황판">
-      <div className="desktop-disaster-banner-title">
-        <span><Cloud size={18} /></span>
-        <div>
-          <strong>재난상황판</strong>
-          <em>설정지역 강우 · 풍속 · 속보 감시</em>
-        </div>
-      </div>
-      <div className="desktop-disaster-banner-kpis">
-        <b><small>종합 강우</small>{totalRain.toFixed(1)}mm</b>
-        <b><small>시간 최대</small>{peakHourlyRain.toFixed(1)}mm</b>
-        <b><small>최대 풍속</small>{maxWind.toFixed(1)}m/s</b>
-        <b className={activeAlerts.length > 0 ? "is-alert" : ""}><small>진행 속보</small>{activeAlerts.length}건</b>
-      </div>
-      <div className="desktop-disaster-banner-window">
-        <div className={cx("desktop-disaster-banner-track", movingItems.length < 2 && "is-static")}>
-          {[...movingItems, ...movingItems].map((item, index) => (
-            <span key={`${item}-${index}`}>{item}</span>
-          ))}
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -2838,6 +2788,7 @@ function DesktopAdminPinGate({ adminPin, onUnlock }: { adminPin: string; onUnloc
           <input
             id="desktop-admin-pin"
             type="password"
+            autoComplete="current-password"
             inputMode="numeric"
             pattern="[0-9]*"
             maxLength={4}
@@ -2914,15 +2865,15 @@ function AdminPinPanel({
       <form onSubmit={handleSubmit} className="desktop-admin-change-form">
         <label>
           현재 PIN
-          <input type="password" inputMode="numeric" maxLength={4} value={currentPin} onChange={(event) => setCurrentPin(cleanPin(event.target.value))} placeholder="0000" />
+          <input type="password" autoComplete="current-password" inputMode="numeric" maxLength={4} value={currentPin} onChange={(event) => setCurrentPin(cleanPin(event.target.value))} placeholder="0000" />
         </label>
         <label>
           새 PIN
-          <input type="password" inputMode="numeric" maxLength={4} value={nextPin} onChange={(event) => setNextPin(cleanPin(event.target.value))} placeholder="숫자 4자리" />
+          <input type="password" autoComplete="new-password" inputMode="numeric" maxLength={4} value={nextPin} onChange={(event) => setNextPin(cleanPin(event.target.value))} placeholder="숫자 4자리" />
         </label>
         <label>
           새 PIN 확인
-          <input type="password" inputMode="numeric" maxLength={4} value={confirmPin} onChange={(event) => setConfirmPin(cleanPin(event.target.value))} placeholder="다시 입력" />
+          <input type="password" autoComplete="new-password" inputMode="numeric" maxLength={4} value={confirmPin} onChange={(event) => setConfirmPin(cleanPin(event.target.value))} placeholder="다시 입력" />
         </label>
         <button type="submit">
           <KeyRound size={16} />
@@ -2931,86 +2882,6 @@ function AdminPinPanel({
         <button type="button" className="is-ghost" onClick={onLock}>관리자 잠금</button>
       </form>
       {message && <strong className={cx("desktop-admin-pin-message", isError && "is-error")}>{message}</strong>}
-    </div>
-  );
-}
-
-function DesktopOffshorePointPanel({
-  points,
-  selectedIds,
-  onAdd,
-  onRemove,
-  onToggle,
-}: {
-  points: TheOneOperation[];
-  selectedIds: string[];
-  onAdd: (input: OffshorePointInput) => void;
-  onRemove: (id: string) => void;
-  onToggle: (id: string) => void;
-}) {
-  const [name, setName] = useState("");
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
-  const [message, setMessage] = useState("");
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const lat = Number(latitude);
-    const lon = Number(longitude);
-
-    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-      setMessage("위도는 -90~90, 경도는 -180~180 범위로 입력해 주세요.");
-      return;
-    }
-
-    onAdd({ name, latitude: lat, longitude: lon });
-    setName("");
-    setLatitude("");
-    setLongitude("");
-    setMessage("원해 좌표 관측점이 추가되었습니다.");
-  }
-
-  return (
-    <div className="desktop-panel desktop-offshore-panel">
-      <div>
-        <h2>원해 좌표 관측점</h2>
-        <p>위도·경도를 입력하면 원해 관측점으로 추가됩니다. 좌표별 공식 API 캐시가 연결되면 해당 지점 수신값으로 자동 대체됩니다.</p>
-      </div>
-      <form onSubmit={submit}>
-        <label>
-          <span>명칭</span>
-          <input value={name} onChange={(event) => setName(event.target.value)} placeholder="예: 서해 원해 1" />
-        </label>
-        <label>
-          <span>위도</span>
-          <input value={latitude} onChange={(event) => setLatitude(event.target.value)} inputMode="decimal" placeholder="36.5000" />
-        </label>
-        <label>
-          <span>경도</span>
-          <input value={longitude} onChange={(event) => setLongitude(event.target.value)} inputMode="decimal" placeholder="125.8000" />
-        </label>
-        <button type="submit">좌표 추가</button>
-      </form>
-      {message && <strong>{message}</strong>}
-      {points.length > 0 && (
-        <div className="desktop-offshore-list">
-          {points.map((point) => {
-            const checked = selectedIds.includes(point.id);
-            const [lat, lon] = point.center ?? [0, 0];
-
-            return (
-              <article key={point.id}>
-                <div>
-                  <span>{point.name}</span>
-                  <em>{lat.toFixed(4)}, {lon.toFixed(4)}</em>
-                </div>
-                <button type="button" onClick={() => onToggle(point.id)}>{checked ? "숨김" : "표시"}</button>
-                <button type="button" className="is-danger" onClick={() => onRemove(point.id)}>삭제</button>
-              </article>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
@@ -3220,35 +3091,25 @@ function formatFeedbackDate(value: string) {
 function DesktopSettings({
   catalog,
   selectedIds,
-  activeType,
   adminPin,
-  customOffshoreOperations,
-  onTypeChange,
   onToggle,
   onClear,
   onDefault,
   onSelectAllType,
   onChangePin,
-  onAddOffshorePoint,
-  onRemoveCustomOffshorePoint,
   onLock,
 }: {
   catalog: TheOneOperation[];
   selectedIds: string[];
-  activeType: OperationType;
   adminPin: string;
-  customOffshoreOperations: TheOneOperation[];
-  onTypeChange: (type: OperationType) => void;
   onToggle: (id: string) => void;
   onClear: () => void;
   onDefault: () => void;
   onSelectAllType: () => void;
   onChangePin: (pin: string) => void;
-  onAddOffshorePoint: (input: OffshorePointInput) => void;
-  onRemoveCustomOffshorePoint: (id: string) => void;
   onLock: () => void;
 }) {
-  const candidates = catalog.filter((operation) => operation.type === activeType);
+  const candidates = catalog.filter((operation) => operation.type === "air" && operationBelongsToTemporaryFixedRegion(operation));
   const activeSelectedCount = candidates.filter((operation) => selectedIds.includes(operation.id)).length;
   const grouped = new Map<string, Map<string, TheOneOperation[]>>();
 
@@ -3264,25 +3125,22 @@ function DesktopSettings({
       <div className="desktop-panel desktop-settings-toolbar">
         <div>
           <h2>지역 설정</h2>
-          <p>{operationConfigs[activeType].title} {activeSelectedCount}개 선택</p>
+          <p>공중기상 {activeSelectedCount}개 선택 · 해안/육상은 충남·대전·세종권 고정</p>
         </div>
-        <DesktopTypeSwitch activeType={activeType} onTypeChange={onTypeChange} />
         <div className="desktop-settings-actions">
-          <button type="button" onClick={onSelectAllType}>현재 분류 전체</button>
+          <button type="button" onClick={onSelectAllType}>공중 전체</button>
           <button type="button" onClick={onDefault}>기본값</button>
           <button type="button" onClick={onClear}>전체 초기화</button>
         </div>
       </div>
       <AdminPinPanel adminPin={adminPin} onChangePin={onChangePin} onLock={onLock} />
-      {activeType === "coastal" && (
-        <DesktopOffshorePointPanel
-          points={customOffshoreOperations}
-          selectedIds={selectedIds}
-          onAdd={onAddOffshorePoint}
-          onRemove={onRemoveCustomOffshorePoint}
-          onToggle={onToggle}
-        />
-      )}
+      <div className="desktop-panel desktop-settings-fixed-note">
+        <LockKeyhole size={22} />
+        <div>
+          <h2>임시 고정 운용</h2>
+          <p>정식 지역관리 기능 적용 전까지 해안·육상 자료는 충남·대전·세종권 전체를 자동 표시합니다. 현재 설정 화면에서는 공중기상 관측권만 조정합니다.</p>
+        </div>
+      </div>
       <div className="desktop-catalog-panel">
         {[...grouped.entries()].map(([provinceName, cityMap]) => {
           const provinceItems = [...cityMap.values()].flat();
