@@ -2846,6 +2846,36 @@ body:has(.desktop-app) {
   background: transparent;
 }
 
+.desktop-alert-modal-item.is-warning {
+  border-color: rgba(255, 100, 100, 0.5);
+  background:
+    linear-gradient(135deg, rgba(255, 82, 82, 0.18), rgba(255, 255, 255, 0.08));
+}
+
+.desktop-alert-modal-item.is-watch {
+  border-color: rgba(248, 193, 61, 0.52);
+  background:
+    linear-gradient(135deg, rgba(248, 193, 61, 0.18), rgba(255, 255, 255, 0.08));
+}
+
+.desktop-alert-region-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.desktop-alert-region-chips b {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 950;
+}
+
 @keyframes desktop-news-roll {
   from {
     transform: translateX(0);
@@ -4180,6 +4210,81 @@ body:has(.desktop-app) {
   font-weight: 950;
 }
 
+.desktop-disaster-alert-controls {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.desktop-disaster-alert-controls button {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 2px 7px;
+  align-items: center;
+  min-height: 72px;
+  border: 1px solid rgba(37, 74, 165, 0.14);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 74, 165, 0.14), transparent 42%),
+    rgba(255, 255, 255, 0.86);
+  color: #172238;
+  padding: 10px;
+  text-align: left;
+  box-shadow: 0 12px 28px rgba(17, 35, 70, 0.06);
+}
+
+.desktop-disaster-alert-controls button svg {
+  grid-row: span 3;
+  color: var(--desktop-blue);
+}
+
+.desktop-disaster-alert-controls button span,
+.desktop-disaster-alert-controls button em {
+  overflow: hidden;
+  color: var(--desktop-muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-disaster-alert-controls button strong {
+  color: #172238;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.desktop-disaster-alert-controls button.is-red,
+.desktop-disaster-alert-controls button.is-active.is-red {
+  border-color: rgba(198, 43, 55, 0.34);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 89, 89, 0.18), transparent 44%),
+    #fff6f6;
+}
+
+.desktop-disaster-alert-controls button.is-yellow,
+.desktop-disaster-alert-controls button.is-active.is-yellow {
+  border-color: rgba(202, 139, 4, 0.34);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(248, 193, 61, 0.28), transparent 44%),
+    #fffaf0;
+}
+
+.desktop-disaster-alert-controls button.is-green {
+  border-color: rgba(21, 128, 61, 0.24);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(67, 214, 128, 0.16), transparent 44%),
+    #f3fff8;
+}
+
+.desktop-disaster-alert-controls button.is-active {
+  border-color: rgba(37, 74, 165, 0.72);
+  box-shadow: 0 0 0 3px rgba(37, 74, 165, 0.12), 0 14px 32px rgba(17, 35, 70, 0.12);
+}
+
 .desktop-disaster-main-grid {
   display: grid;
   grid-template-columns: minmax(260px, 1.1fr) minmax(240px, 1fr) minmax(220px, 0.8fr);
@@ -4411,8 +4516,39 @@ body:has(.desktop-app) {
   border-left: 4px solid rgba(248, 193, 61, 0.9);
 }
 
+.desktop-disaster-alert-line {
+  display: grid;
+  gap: 3px;
+}
+
+.desktop-disaster-alert-line strong {
+  color: #172238;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.desktop-disaster-alert-line span {
+  color: #52627a;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.desktop-disaster-alert-line.is-warning {
+  border-left-color: #d33746;
+  background: #fff2f2;
+}
+
+.desktop-disaster-alert-line.is-watch {
+  border-left-color: #f0ad20;
+  background: #fff8e6;
+}
+
+.desktop-disaster-alert-line.is-info {
+  border-left-color: #4da3ff;
+}
+
 .desktop-threat-sheet {
-  grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
   gap: 10px;
   padding: 14px;
   background:
@@ -4427,9 +4563,8 @@ body:has(.desktop-app) {
 }
 
 .desktop-threat-date-grid,
-.desktop-threat-time-grid,
+.desktop-threat-time-slider,
 .desktop-threat-summary,
-.desktop-threat-ticker,
 .desktop-threat-board {
   min-width: 0;
 }
@@ -4441,7 +4576,6 @@ body:has(.desktop-app) {
 }
 
 .desktop-threat-date-grid button,
-.desktop-threat-time-grid button,
 .desktop-threat-summary article {
   border: 1px solid rgba(37, 74, 165, 0.18);
   border-radius: 14px;
@@ -4482,28 +4616,77 @@ body:has(.desktop-app) {
   font-weight: 950;
 }
 
-.desktop-threat-time-grid {
+.desktop-threat-time-slider {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 6px;
-  overflow: hidden;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid rgba(37, 74, 165, 0.16);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 74, 165, 0.1), transparent 36%),
+    rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 30px rgba(18, 42, 82, 0.08);
 }
 
-.desktop-threat-time-grid button {
-  min-width: 0;
-  min-height: 36px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
+.desktop-threat-time-slider > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.desktop-threat-time-slider span {
   color: #26466f;
-  font-size: clamp(12px, 0.86vw, 14px);
+  font-size: 12px;
   font-weight: 950;
 }
 
-.desktop-threat-time-grid button.is-active {
-  border-color: rgba(18, 45, 101, 0.58);
-  background: linear-gradient(145deg, #183463, #254aa5);
-  color: white;
+.desktop-threat-time-slider strong {
+  color: #10213d;
+  font-size: clamp(20px, 1.9vw, 30px);
+  line-height: 1;
+  font-weight: 950;
+}
+
+.desktop-threat-time-slider input[type="range"] {
+  width: 100%;
+  height: 10px;
+  appearance: none;
+  border-radius: 999px;
+  outline: none;
+  background: linear-gradient(90deg, #254aa5, #79a7ff);
+}
+
+.desktop-threat-time-slider input[type="range"]::-webkit-slider-thumb {
+  width: 26px;
+  height: 26px;
+  appearance: none;
+  border: 3px solid #ffffff;
+  border-radius: 999px;
+  background: #254aa5;
+  box-shadow: 0 8px 18px rgba(37, 74, 165, 0.26);
+}
+
+.desktop-threat-time-slider input[type="range"]::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 3px solid #ffffff;
+  border-radius: 999px;
+  background: #254aa5;
+  box-shadow: 0 8px 18px rgba(37, 74, 165, 0.26);
+}
+
+.desktop-threat-time-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.desktop-threat-time-scale span {
+  color: #71819b;
+  font-size: 11px;
+  font-weight: 900;
 }
 
 .desktop-threat-summary {
@@ -4540,50 +4723,6 @@ body:has(.desktop-app) {
   white-space: nowrap;
   font-size: clamp(14px, 1.1vw, 17px);
   font-weight: 950;
-}
-
-.desktop-threat-ticker {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  min-height: 42px;
-  overflow: hidden;
-  border: 1px solid rgba(37, 74, 165, 0.18);
-  border-radius: 16px;
-  background: linear-gradient(90deg, rgba(18, 45, 101, 0.96), rgba(37, 74, 165, 0.88));
-  color: white;
-  padding: 0 12px;
-  box-shadow: 0 12px 30px rgba(18, 42, 82, 0.12);
-}
-
-.desktop-threat-ticker > span {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 26px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  padding: 0 10px;
-  font-size: 12px;
-  font-weight: 950;
-  white-space: nowrap;
-}
-
-.desktop-threat-ticker div {
-  min-width: 0;
-  overflow: hidden;
-}
-
-.desktop-threat-ticker p {
-  width: max-content;
-  min-width: 100%;
-  margin: 0;
-  color: rgba(255, 255, 255, 0.96);
-  font-size: clamp(12px, 0.9vw, 15px);
-  font-weight: 900;
-  white-space: nowrap;
-  animation: desktop-alert-roll 42s linear infinite;
 }
 
 .desktop-threat-board {
@@ -5968,7 +6107,7 @@ body:has(.desktop-app) {
   background: rgba(255, 255, 255, 0.88);
 }
 
-.desktop-feedback-list article > div {
+.desktop-feedback-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -6007,6 +6146,82 @@ body:has(.desktop-app) {
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.desktop-feedback-replies {
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  border-radius: 16px;
+  background: #f3f8ff;
+}
+
+.desktop-feedback-replies section {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid rgba(37, 74, 165, 0.1);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.desktop-feedback-replies section > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.desktop-feedback-replies section strong {
+  color: var(--desktop-blue);
+}
+
+.desktop-feedback-reply-form {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.35fr) minmax(140px, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+}
+
+.desktop-feedback-reply-form input {
+  min-width: 0;
+  height: 36px;
+  border: 1px solid #d6e3f5;
+  border-radius: 999px;
+  background: #f8fbff;
+  color: #172238;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  outline: none;
+}
+
+.desktop-feedback-reply-form input:focus {
+  border-color: var(--desktop-blue);
+  box-shadow: 0 0 0 3px rgba(37, 74, 165, 0.1);
+}
+
+.desktop-feedback-reply-form button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: #254aa5;
+  color: white;
+  padding: 0 13px;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.desktop-feedback-reply-form span {
+  grid-column: 1 / -1;
+  color: #12753b;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.desktop-feedback-reply-form span.is-error {
+  color: #b32635;
 }
 
 .desktop-feedback-empty {
@@ -6418,6 +6633,10 @@ body:has(.desktop-app) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .desktop-disaster-alert-controls {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .desktop-hourly-value-strip,
   .desktop-hourly-static-grid {
     grid-template-columns: repeat(4, minmax(74px, 1fr));
@@ -6473,6 +6692,7 @@ body:has(.desktop-app) {
   .desktop-weekly-card-grid,
   .desktop-live-map-grid,
   .desktop-disaster-kpi-grid,
+  .desktop-disaster-alert-controls,
   .desktop-disaster-region-list > div,
   .desktop-disaster-river > div {
     grid-template-columns: 1fr;
@@ -6515,9 +6735,12 @@ body:has(.desktop-app) {
     grid-template-columns: 1fr;
   }
 
-  .desktop-threat-date-grid,
-  .desktop-threat-time-grid {
+  .desktop-threat-date-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .desktop-feedback-reply-form {
+    grid-template-columns: 1fr;
   }
 
   .desktop-threat-summary,

@@ -79,7 +79,26 @@ type FeedbackItem = {
   message: string;
   contact?: string;
   path?: string;
+  replies?: FeedbackReply[];
 };
+type FeedbackReply = {
+  id: string;
+  createdAt: string;
+  message: string;
+  author?: string;
+};
+type DisasterRegionRow = {
+  id: string;
+  label: string;
+  operations: TheOneOperation[];
+  rainMm: number;
+  rainProbability: number;
+  temperatureC: number;
+  windMs: number;
+  waveM: number;
+  forecast: number[];
+};
+type DisasterAlertFilter = "all" | "warning" | "watch" | "earthquake" | "tsunami" | "stormWave" | "landslide" | "wildfire";
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const VWORLD_API_KEY = process.env.NEXT_PUBLIC_VWORLD_API_KEY ?? "";
@@ -104,7 +123,6 @@ const MAP_ZOOM_MIN = 4;
 const MAP_ZOOM_MAX = 11;
 const DESKTOP_HOURLY_STEPS = Array.from({ length: 24 }, (_, index) => index + 1);
 const DISASTER_HOUR_OFFSETS = Array.from({ length: 8 }, (_, index) => index);
-const DISASTER_TARGET_KEYWORDS = ["당진", "서산", "태안", "보령", "서천", "세종", "계룡"];
 const CHUNGCHEONG_ALERT_KEYWORDS = [
   "충남",
   "충청남도",
@@ -285,8 +303,9 @@ function findAnyOperationByKeywords(operations: TheOneOperation[], keywords: str
 const REGION_KEYWORDS = [
   "서산", "당진", "태안", "보령", "대전", "세종", "서울", "인천", "김포", "수원", "파주", "용인",
   "철원", "춘천", "원주", "강릉", "속초", "양양", "태백", "청주", "충주", "공주", "천안", "아산",
-  "군산", "전주", "광주", "무안", "여수", "목포", "대구", "부산", "김해", "울산", "포항", "사천",
-  "제주", "서귀포", "성산", "백령", "대련", "위해", "동중국해", "동해",
+  "계룡", "논산", "금산", "부여", "청양", "홍성", "예산", "군산", "전주", "광주", "무안", "여수",
+  "목포", "대구", "부산", "김해", "울산", "포항", "사천", "제주", "서귀포", "성산", "백령", "대련",
+  "위해", "동중국해", "동해",
 ];
 const WEATHER_ANALYSIS_REGION_ORDER = [
   { label: "서천", keywords: ["서천", "장항", "홍원", "마량"] },
@@ -362,6 +381,29 @@ function catalogLocationParts(operation: TheOneOperation) {
 function alertTickerText(alert: LiveAlert) {
   const area = alert.regionText || alert.source.replace(/^기상청\s*·?\s*/, "");
   return `${area} · ${alert.rawTitle ?? alert.message}`;
+}
+
+function alertTextBundle(alert: LiveAlert) {
+  return [alert.title, alert.rawTitle, alert.message, alert.source, alert.regionText, ...(alert.regions ?? [])]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function alertSeverityGroup(alert: LiveAlert): "warning" | "watch" | "info" {
+  const text = alertTextBundle(alert);
+  if (/경보|위험|긴급/.test(text) || alert.level === "warning") return "warning";
+  if (/주의보|주의|예비|관심/.test(text) || alert.level === "watch") return "watch";
+  return "info";
+}
+
+function alertRegionChips(alert: LiveAlert) {
+  const raw = alert.regionText || (alert.regions ?? []).join(", ") || alert.source.replace(/^기상청\s*·?\s*/, "");
+  const parts = raw
+    .split(/[,/·ㆍ]+|\s{2,}/g)
+    .map((part) => part.replace(/특보구역|기상청|발효|해제/g, "").trim())
+    .filter(Boolean);
+  const normalized = [...new Set(parts.length > 0 ? parts : [raw.trim()])].slice(0, 8);
+  return normalized.length > 0 ? normalized : ["지역 확인 필요"];
 }
 
 function alertTimestampMs(alert: LiveAlert) {
@@ -495,11 +537,6 @@ function dateAdjustedWeather(base: string, dayOffset: number) {
   if (base !== "맑음" && Math.abs(offset) % 3 !== 1) return base;
   const sequence = ["맑음", "구름많음", "흐림", "맑음", "비"];
   return sequence[((offset % sequence.length) + sequence.length) % sequence.length];
-}
-
-function dateAdjustedAlert(base: string, dayOffset: number) {
-  if (base !== "없음") return base;
-  return Math.abs(dayOffset) % 9 === 0 && dayOffset !== 0 ? "기상변동 확인" : "없음";
 }
 
 function dateAdjustedTideAge(value: string, dayOffset: number) {
@@ -1202,8 +1239,11 @@ function AlertModalColumn({ title, alerts, empty }: { title: string; alerts: Liv
       <h3>{title}</h3>
       <div>
         {alerts.length > 0 ? alerts.map((alert) => (
-          <article key={`modal-${title}-${alert.id}`}>
-            <strong>{alert.regionText || alert.source}</strong>
+          <article key={`modal-${title}-${alert.id}`} className={cx("desktop-alert-modal-item", `is-${alertSeverityGroup(alert)}`)}>
+            <div className="desktop-alert-region-chips">
+              {alertRegionChips(alert).map((region) => <b key={`${alert.id}-${region}`}>{region}</b>)}
+            </div>
+            <strong>{alertSeverityGroup(alert) === "warning" ? "경보" : alertSeverityGroup(alert) === "watch" ? "주의보" : "속보"}</strong>
             <span>{alert.rawTitle ?? alert.title}</span>
             <p>{alert.message}</p>
             <em>{new Date(alert.timestamp).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false })}</em>
@@ -1854,7 +1894,7 @@ function WeeklyMetricCard({ metric, index }: { metric: DesktopMetric; index: num
   );
 }
 
-function WeatherAnalysisSheet({ operations, alerts }: { operations: TheOneOperation[]; alerts: LiveAlert[] }) {
+function WeatherAnalysisSheet({ operations }: { operations: TheOneOperation[]; alerts: LiveAlert[] }) {
   const coastalRows = WEATHER_ANALYSIS_REGION_ORDER
     .map((region) => ({
       label: region.label,
@@ -1933,7 +1973,6 @@ function WeatherAnalysisSheet({ operations, alerts }: { operations: TheOneOperat
           </tbody>
         </table>
       </div>
-      <DisasterSituationBoard operations={operations} alerts={alerts} />
     </section>
   );
 }
@@ -1987,12 +2026,111 @@ function rainfallForecast(operation: TheOneOperation) {
   });
 }
 
+const DISASTER_REGION_ORDER = [
+  "서산", "당진", "태안", "보령", "서천", "세종", "계룡", "대전", "천안", "아산", "홍성", "예산", "공주", "논산", "부여", "금산", "청양",
+];
+const DISASTER_REGION_ALIASES: Array<[string, string[]]> = [
+  ["서산", ["서산", "대산", "해미"]],
+  ["당진", ["당진", "장고항"]],
+  ["태안", ["태안", "안흥", "만리포", "꽃지"]],
+  ["보령", ["보령", "대천", "무창포", "삽시도"]],
+  ["서천", ["서천", "장항", "홍원", "마량"]],
+  ["세종", ["세종"]],
+  ["계룡", ["계룡"]],
+  ["대전", ["대전", "유성"]],
+  ["천안", ["천안"]],
+  ["아산", ["아산"]],
+  ["홍성", ["홍성", "남당"]],
+  ["예산", ["예산"]],
+  ["공주", ["공주"]],
+  ["논산", ["논산"]],
+  ["부여", ["부여"]],
+  ["금산", ["금산"]],
+  ["청양", ["청양"]],
+];
+
+function disasterRegionLabel(operation: TheOneOperation) {
+  const text = `${operation.name} ${operation.area ?? ""}`;
+  return DISASTER_REGION_ALIASES.find(([, aliases]) => aliases.some((alias) => text.includes(alias)))?.[0] ?? displayRegionName(operation);
+}
+
 function disasterSituationRows(operations: TheOneOperation[]) {
-  const picked = DISASTER_TARGET_KEYWORDS
+  const picked = DISASTER_REGION_ORDER
+    .flatMap((region) => DISASTER_REGION_ALIASES.find(([label]) => label === region)?.[1] ?? [region])
     .map((keyword) => findAnyOperationByKeywords(operations, [keyword]))
     .filter((operation): operation is TheOneOperation => Boolean(operation));
-  const unique = [...new Map(picked.map((operation) => [operation.id, operation])).values()];
-  return (unique.length > 0 ? unique : operations).slice(0, 7);
+  const unique = uniqueOperations(picked.length > 0 ? picked : operations);
+  const grouped = unique.reduce<Map<string, TheOneOperation[]>>((map, operation) => {
+    const label = disasterRegionLabel(operation);
+    if (!DISASTER_REGION_ORDER.includes(label)) return map;
+    map.set(label, [...(map.get(label) ?? []), operation]);
+    return map;
+  }, new Map());
+
+  return DISASTER_REGION_ORDER.flatMap((label): DisasterRegionRow[] => {
+    const regionOperations = grouped.get(label) ?? [];
+    if (regionOperations.length === 0) return [];
+    const forecast = DISASTER_HOUR_OFFSETS.map((_, index) => Math.max(0, ...regionOperations.map((operation) => rainfallForecast(operation)[index] ?? 0)));
+    return [{
+      id: label,
+      label,
+      operations: regionOperations,
+      rainMm: Math.max(0, ...regionOperations.map(operationRainMm)),
+      rainProbability: Math.max(0, ...regionOperations.map(operationRainProbability)),
+      temperatureC: Math.round(regionOperations.reduce((sum, operation) => sum + operationTemperature(operation), 0) / regionOperations.length),
+      windMs: Math.max(0, ...regionOperations.map(operationWindMs)),
+      waveM: Math.max(0, ...regionOperations.map(operationWaveM)),
+      forecast,
+    }];
+  });
+}
+
+function disasterAlertCategory(alert: LiveAlert): DisasterAlertFilter | "other" {
+  const text = alertTextBundle(alert);
+  if (/지진/.test(text)) return "earthquake";
+  if (/해일|지진해일|폭풍해일/.test(text)) return "tsunami";
+  if (/풍랑|너울|파고/.test(text)) return "stormWave";
+  if (/산사태|사면/.test(text)) return "landslide";
+  if (/산불|건조/.test(text)) return "wildfire";
+  return "other";
+}
+
+function disasterAlertMatchesFilter(alert: LiveAlert, filter: DisasterAlertFilter) {
+  if (filter === "all") return true;
+  if (filter === "warning" || filter === "watch") return alertSeverityGroup(alert) === filter;
+  return disasterAlertCategory(alert) === filter;
+}
+
+function disasterDerivedNotes(rows: DisasterRegionRow[], filter: DisasterAlertFilter) {
+  const notes: Array<{ id: string; title: string; body: string; tone: "info" | "watch" | "warning" }> = [];
+  rows.forEach((row) => {
+    const peakRain = Math.max(row.rainMm, ...row.forecast);
+    if ((filter === "all" || filter === "landslide" || filter === "watch") && peakRain >= 20) {
+      notes.push({
+        id: `${row.id}-landslide`,
+        title: `${row.label} 산사태·급류 유의`,
+        body: `예상 시간최대 강우 ${peakRain.toFixed(1)}mm 기준으로 지형 취약지 확인이 필요합니다.`,
+        tone: peakRain >= 30 ? "warning" : "watch",
+      });
+    }
+    if ((filter === "all" || filter === "wildfire" || filter === "watch") && row.windMs >= 9 && row.rainMm < 1) {
+      notes.push({
+        id: `${row.id}-wildfire`,
+        title: `${row.label} 산불 확산 유의`,
+        body: `강수는 적고 풍속 ${row.windMs.toFixed(1)}m/s로 산불 확산 참고값이 상승했습니다.`,
+        tone: row.windMs >= 14 ? "warning" : "watch",
+      });
+    }
+    if ((filter === "all" || filter === "stormWave" || filter === "warning") && (row.waveM >= 2 || row.windMs >= 14)) {
+      notes.push({
+        id: `${row.id}-wave`,
+        title: `${row.label} 풍랑 참고`,
+        body: `파고 ${row.waveM.toFixed(1)}m · 풍속 ${row.windMs.toFixed(1)}m/s 기준으로 해안 활동 제한요소를 확인하세요.`,
+        tone: row.waveM >= 3 || row.windMs >= 20 ? "warning" : "watch",
+      });
+    }
+  });
+  return notes;
 }
 
 function rainfallCellTone(value: number) {
@@ -2018,17 +2156,31 @@ function waveImpactText(waveM: number) {
 }
 
 function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOperation[]; alerts: LiveAlert[] }) {
+  const [activeFilter, setActiveFilter] = useState<DisasterAlertFilter>("all");
   const rows = disasterSituationRows(operations);
   const hourlyLabels = DISASTER_HOUR_OFFSETS.map(nextKstHourLabel);
-  const rainRows = rows.map((operation) => ({ operation, forecast: rainfallForecast(operation) }));
-  const peakHourlyRain = Math.max(0, ...rainRows.flatMap((row) => row.forecast));
-  const totalRain = rows.reduce((sum, operation) => sum + operationRainMm(operation), 0);
-  const maxWind = rows.reduce((max, operation) => Math.max(max, operationWindMs(operation)), 0);
-  const maxWave = rows.reduce((max, operation) => Math.max(max, operationWaveM(operation)), 0);
+  const peakHourlyRain = Math.max(0, ...rows.flatMap((row) => row.forecast));
+  const totalRain = rows.reduce((sum, row) => sum + row.rainMm, 0);
+  const maxWind = rows.reduce((max, row) => Math.max(max, row.windMs), 0);
+  const maxWave = rows.reduce((max, row) => Math.max(max, row.waveM), 0);
   const averageTemp = rows.length > 0
-    ? Math.round(rows.reduce((sum, operation) => sum + operationTemperature(operation), 0) / rows.length)
+    ? Math.round(rows.reduce((sum, row) => sum + row.temperatureC, 0) / rows.length)
     : 0;
-  const activeAlerts = alerts.filter((alert) => !alertIsEnded(alert)).slice(0, 4);
+  const activeAlerts = alerts.filter((alert) => !alertIsEnded(alert));
+  const warningCount = activeAlerts.filter((alert) => alertSeverityGroup(alert) === "warning").length;
+  const watchCount = activeAlerts.filter((alert) => alertSeverityGroup(alert) === "watch").length;
+  const hazardCards: Array<{ id: DisasterAlertFilter; label: string; value: string; helper: string; icon: IconType; tone: "blue" | "yellow" | "red" | "green" }> = [
+    { id: "warning", label: "경고", value: `${warningCount}건`, helper: "충남·대전·세종", icon: Bell, tone: warningCount > 0 ? "red" : "green" },
+    { id: "watch", label: "주의보", value: `${watchCount}건`, helper: "충남·대전·세종", icon: Shield, tone: watchCount > 0 ? "yellow" : "green" },
+    { id: "earthquake", label: "지진", value: `${activeAlerts.filter((alert) => disasterAlertCategory(alert) === "earthquake").length}건`, helper: "지진·진도", icon: Activity, tone: "blue" },
+    { id: "tsunami", label: "해일", value: `${activeAlerts.filter((alert) => disasterAlertCategory(alert) === "tsunami").length}건`, helper: "지진해일·폭풍해일", icon: Waves, tone: "blue" },
+    { id: "stormWave", label: "풍랑", value: `${activeAlerts.filter((alert) => disasterAlertCategory(alert) === "stormWave").length}건`, helper: `최대 파고 ${maxWave.toFixed(1)}m`, icon: Wind, tone: maxWave >= 2 ? "yellow" : "blue" },
+    { id: "landslide", label: "산사태", value: `${disasterDerivedNotes(rows, "landslide").length}곳`, helper: `시간최대 ${peakHourlyRain.toFixed(1)}mm`, icon: Cloud, tone: peakHourlyRain >= 30 ? "red" : peakHourlyRain >= 20 ? "yellow" : "blue" },
+    { id: "wildfire", label: "산불", value: `${disasterDerivedNotes(rows, "wildfire").length}곳`, helper: `최대 풍속 ${maxWind.toFixed(1)}m/s`, icon: Thermometer, tone: disasterDerivedNotes(rows, "wildfire").length > 0 ? "yellow" : "blue" },
+  ];
+  const filteredAlerts = activeAlerts.filter((alert) => disasterAlertMatchesFilter(alert, activeFilter));
+  const allDerivedNotes = disasterDerivedNotes(rows, "all");
+  const derivedNotes = disasterDerivedNotes(rows, activeFilter).slice(0, 8);
   const riverCards = [
     { name: "금강 하류", value: "연동 대기", status: "수위 API 필요" },
     { name: "삽교천", value: "연동 대기", status: "수위 API 필요" },
@@ -2068,11 +2220,30 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
         </article>
       </div>
 
+      <div className="desktop-disaster-alert-controls" aria-label="재난 유형별 현황">
+        <button type="button" className={cx(activeFilter === "all" && "is-active")} onClick={() => setActiveFilter("all")}>
+          <Check size={16} />
+          <span>전체</span>
+          <strong>{activeAlerts.length + allDerivedNotes.length}건</strong>
+        </button>
+        {hazardCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <button key={card.id} type="button" className={cx(`is-${card.tone}`, activeFilter === card.id && "is-active")} onClick={() => setActiveFilter(card.id)}>
+              <Icon size={16} />
+              <span>{card.label}</span>
+              <strong>{card.value}</strong>
+              <em>{card.helper}</em>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="desktop-disaster-main-grid">
         <article className="desktop-disaster-rain-table-card">
           <div className="desktop-disaster-card-head">
             <h3>시간별 강우량</h3>
-            <span>설정지역 기준</span>
+            <span>충남·대전·세종</span>
           </div>
           <div className="desktop-disaster-rain-table-wrap">
             <table className="desktop-disaster-rain-table">
@@ -2083,18 +2254,18 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
                 </tr>
               </thead>
               <tbody>
-                {rainRows.map((row) => (
-                  <tr key={`rain-row-${row.operation.id}`}>
-                    <th>{cleanName(row.operation)}</th>
+                {rows.map((row) => (
+                  <tr key={`rain-row-${row.id}`}>
+                    <th>{row.label}</th>
                     {row.forecast.map((value, index) => (
-                      <td key={`${row.operation.id}-rain-${index}`} className={rainfallCellTone(value)}>
+                      <td key={`${row.id}-rain-${index}`} className={rainfallCellTone(value)}>
                         <strong>{value.toFixed(1)}</strong>
                         <span>mm</span>
                       </td>
                     ))}
                   </tr>
                 ))}
-                {rainRows.length === 0 && (
+                {rows.length === 0 && (
                   <tr>
                     <td colSpan={hourlyLabels.length + 1}>관리자 설정에서 지역을 선택하세요.</td>
                   </tr>
@@ -2110,10 +2281,10 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
             <span>강우 · 기온 · 풍속</span>
           </div>
           <div>
-            {rows.map((operation) => (
-              <b key={`disaster-${operation.id}`}>
-                <span>{cleanName(operation)}</span>
-                <em>{operationRainMm(operation).toFixed(1)}mm · {operationTemperature(operation)}℃ · {operationWindMs(operation).toFixed(1)}m/s</em>
+            {rows.map((row) => (
+              <b key={`disaster-${row.id}`}>
+                <span>{row.label}</span>
+                <em>{row.rainMm.toFixed(1)}mm · {row.temperatureC}℃ · {row.windMs.toFixed(1)}m/s</em>
               </b>
             ))}
             {rows.length === 0 && <p>관리자 설정에서 지역을 선택하세요.</p>}
@@ -2131,13 +2302,24 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
 
         <article className="desktop-disaster-alerts">
           <div className="desktop-disaster-card-head">
-            <h3>속보</h3>
-            <span>진행 중</span>
+            <h3>재난 상세</h3>
+            <span>{activeFilter === "all" ? "전체" : hazardCards.find((card) => card.id === activeFilter)?.label}</span>
           </div>
-          {activeAlerts.length > 0 ? activeAlerts.map((alert) => (
-            <p key={`disaster-alert-${alert.id}`}>{alertTickerText(alert)}</p>
+          {filteredAlerts.length > 0 ? filteredAlerts.slice(0, 7).map((alert) => (
+            <p key={`disaster-alert-${alert.id}`} className={cx("desktop-disaster-alert-line", `is-${alertSeverityGroup(alert)}`)}>
+              <strong>{alertRegionChips(alert).join(" · ")}</strong>
+              <span>{alert.rawTitle ?? alert.title}</span>
+            </p>
           )) : (
-            <p>표시할 진행 중 속보 없음</p>
+            <p>현재 발효 중인 공식 속보 없음</p>
+          )}
+          {derivedNotes.length > 0 ? derivedNotes.map((note) => (
+            <p key={note.id} className={cx("desktop-disaster-alert-line", `is-${note.tone}`)}>
+              <strong>{note.title}</strong>
+              <span>{note.body}</span>
+            </p>
+          )) : (
+            filteredAlerts.length === 0 && <p>표시할 참고 현황 없음</p>
           )}
         </article>
 
@@ -2564,7 +2746,7 @@ function addDaysToParts(parts: { year: number; month: number; day: number }, del
   return kstDateParts(date);
 }
 
-function AccessAssessmentSheet({ operations, alerts }: { operations: TheOneOperation[]; alerts: LiveAlert[] }) {
+function AccessAssessmentSheet({ operations }: { operations: TheOneOperation[]; alerts: LiveAlert[] }) {
   const coastal = operations.filter((operation) => operation.type === "coastal" && operation.coastal);
   const currentDate = kstDateParts();
   const [sheetDate, setSheetDate] = useState(() => currentDate);
@@ -2579,7 +2761,6 @@ function AccessAssessmentSheet({ operations, alerts }: { operations: TheOneOpera
     { label: "모레", delta: 2 },
     { label: "글피", delta: 3 },
   ];
-  const timeTabs = Array.from({ length: 24 }, (_, hour) => hour);
   const inboundRows = [
     threatRegion("당진", ["당진 권역", "당진"]),
     threatRegion("태안", ["태안 권역", "태안"]),
@@ -2597,15 +2778,6 @@ function AccessAssessmentSheet({ operations, alerts }: { operations: TheOneOpera
   ];
   const primary = inboundRows.find((row) => row.operation?.coastal)?.operation ?? coastal[0];
   const primaryData = primary?.coastal;
-  const threatWarningItems = [...inboundRows, ...outboundRows].flatMap((row) => {
-    const matchedWarnings = row.operation ? alertsForOperation(alerts, row.operation).slice(0, 2) : [];
-    if (matchedWarnings.length > 0) {
-      return matchedWarnings.map((alert) => ({ id: `${row.id}-${alert.id}`, label: row.label, text: alertTickerText(alert) }));
-    }
-
-    const fallbackWarning = row.operation?.coastal ? dateAdjustedAlert(row.operation.coastal.weatherAlert, dayOffset) : "없음";
-    return fallbackWarning === "없음" ? [] : [{ id: `${row.id}-fallback`, label: row.label, text: fallbackWarning }];
-  });
   const tideAgeText = primaryData ? dateAdjustedTideAge(primaryData.tideAge, dayOffset) : "-";
 
   if (coastal.length === 0) return <DesktopEmptySheet label="해안 지역을 선택하면 판단표가 표시됩니다." />;
@@ -2657,12 +2829,24 @@ function AccessAssessmentSheet({ operations, alerts }: { operations: TheOneOpera
         })}
       </div>
 
-      <div className="desktop-threat-time-grid">
-        {timeTabs.map((hour) => (
-          <button key={hour} type="button" className={hour === selectedHour ? "is-active" : ""} onClick={() => setSelectedHour(hour)}>
-            {String(hour).padStart(2, "0")}시
-          </button>
-        ))}
+      <div className="desktop-threat-time-slider">
+        <div>
+          <span>시간 기준</span>
+          <strong>{String(selectedHour).padStart(2, "0")}:00</strong>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={23}
+          step={1}
+          value={selectedHour}
+          aria-label="해상위협 판단 시간"
+          aria-valuetext={`${String(selectedHour).padStart(2, "0")}시`}
+          onChange={(event) => setSelectedHour(Number(event.currentTarget.value))}
+        />
+        <div className="desktop-threat-time-scale" aria-hidden="true">
+          {[0, 6, 12, 18, 23].map((hour) => <span key={hour}>{String(hour).padStart(2, "0")}시</span>)}
+        </div>
       </div>
 
       <div className="desktop-threat-summary">
@@ -2674,17 +2858,6 @@ function AccessAssessmentSheet({ operations, alerts }: { operations: TheOneOpera
           <span>물때</span>
           <strong>{tideAgeText}</strong>
         </article>
-      </div>
-
-      <div className="desktop-threat-ticker" aria-label="해상위협 지역 특보현황">
-        <span>지역 특보</span>
-        <div>
-          <p>
-            {threatWarningItems.length > 0
-              ? [...threatWarningItems, ...threatWarningItems].map((item) => `${item.label} ${item.text}`).join(" · ")
-              : "당진 · 태안 · 보령 · 서천 · 대련 · 위해 · 공해 현재 표시할 특보 없음"}
-          </p>
-        </div>
       </div>
 
       <div className="desktop-threat-board">
@@ -2892,6 +3065,9 @@ function DesktopFeedbackPanel() {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "local" | "error">("idle");
   const [items, setItems] = useState<FeedbackItem[]>([]);
   const [loadStatus, setLoadStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [replyPins, setReplyPins] = useState<Record<string, string>>({});
+  const [replyStatus, setReplyStatus] = useState<Record<string, "idle" | "sending" | "sent" | "error">>({});
 
   useEffect(() => {
     safeLocalStorage()?.setItem(DESKTOP_FEEDBACK_DRAFT_KEY, memo);
@@ -2967,6 +3143,42 @@ function DesktopFeedbackPanel() {
     }
   }
 
+  async function submitReply(event: FormEvent<HTMLFormElement>, itemId: string) {
+    event.preventDefault();
+    const message = (replyDrafts[itemId] ?? "").trim();
+    const pin = (replyPins[itemId] ?? "").trim();
+    if (!message || !pin) {
+      setReplyStatus((current) => ({ ...current, [itemId]: "error" }));
+      return;
+    }
+
+    setReplyStatus((current) => ({ ...current, [itemId]: "sending" }));
+    try {
+      const response = await fetch("/api/feedback/reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: itemId,
+          pin,
+          reply: message,
+          author: "관리자",
+        }),
+      });
+      if (!response.ok) throw new Error("reply failed");
+      const responseBody = await response.json().catch(() => null) as { item?: unknown } | null;
+      const nextItem = responseBody?.item ? normalizeFeedbackItem(responseBody.item) : null;
+      if (nextItem) {
+        setItems((current) => current.map((item) => item.id === itemId ? nextItem : item));
+      } else {
+        void fetchFeedbackItems().then(setItems);
+      }
+      setReplyDrafts((current) => ({ ...current, [itemId]: "" }));
+      setReplyStatus((current) => ({ ...current, [itemId]: "sent" }));
+    } catch {
+      setReplyStatus((current) => ({ ...current, [itemId]: "error" }));
+    }
+  }
+
   return (
     <section className="desktop-feedback-page">
       <article className="desktop-feedback-list-panel">
@@ -2981,12 +3193,53 @@ function DesktopFeedbackPanel() {
         <div className="desktop-feedback-list">
           {items.length > 0 ? items.map((item) => (
             <article key={item.id}>
-              <div>
+              <div className="desktop-feedback-meta">
                 <strong>{item.contact || "익명 운용자"}</strong>
                 <time dateTime={item.createdAt}>{formatFeedbackDate(item.createdAt)}</time>
               </div>
               <p>{item.message}</p>
               {item.path && <em>{item.path}</em>}
+              {item.replies && item.replies.length > 0 && (
+                <div className="desktop-feedback-replies">
+                  {item.replies.map((reply) => (
+                    <section key={reply.id}>
+                      <div>
+                        <strong>{reply.author || "관리자"}</strong>
+                        <time dateTime={reply.createdAt}>{formatFeedbackDate(reply.createdAt)}</time>
+                      </div>
+                      <p>{reply.message}</p>
+                    </section>
+                  ))}
+                </div>
+              )}
+              <form className="desktop-feedback-reply-form" onSubmit={(event) => submitReply(event, item.id)}>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={replyPins[item.id] ?? ""}
+                  onChange={(event) => {
+                    setReplyPins((current) => ({ ...current, [item.id]: event.target.value.slice(0, 12) }));
+                    setReplyStatus((current) => ({ ...current, [item.id]: "idle" }));
+                  }}
+                  placeholder="관리자 PIN"
+                  aria-label="관리자 PIN"
+                />
+                <input
+                  autoComplete="off"
+                  value={replyDrafts[item.id] ?? ""}
+                  onChange={(event) => {
+                    setReplyDrafts((current) => ({ ...current, [item.id]: event.target.value.slice(0, 600) }));
+                    setReplyStatus((current) => ({ ...current, [item.id]: "idle" }));
+                  }}
+                  placeholder="답변 입력"
+                  aria-label="답변 입력"
+                />
+                <button type="submit" disabled={replyStatus[item.id] === "sending"}>
+                  {replyStatus[item.id] === "sending" ? "저장" : "답변"}
+                </button>
+                {replyStatus[item.id] === "sent" && <span>답변 저장 완료</span>}
+                {replyStatus[item.id] === "error" && <span className="is-error">PIN 또는 내용을 확인하세요</span>}
+              </form>
             </article>
           )) : (
             <div className="desktop-feedback-empty">
@@ -3053,12 +3306,27 @@ function normalizeFeedbackItem(value: unknown): FeedbackItem | null {
   const item = value as Record<string, unknown>;
   const message = String(item.message || "").trim();
   if (!message) return null;
+  const replies = Array.isArray(item.replies)
+    ? item.replies.flatMap((reply): FeedbackReply[] => {
+      if (!reply || typeof reply !== "object") return [];
+      const replyRecord = reply as Record<string, unknown>;
+      const replyMessage = String(replyRecord.message || "").trim();
+      if (!replyMessage) return [];
+      return [{
+        id: String(replyRecord.id || `reply-${Date.now()}`),
+        createdAt: String(replyRecord.createdAt || new Date().toISOString()),
+        message: replyMessage.slice(0, 600),
+        author: String(replyRecord.author || "").trim().slice(0, 40) || "관리자",
+      }];
+    })
+    : [];
   return {
     id: String(item.id || `feedback-${Date.now()}`),
     createdAt: String(item.createdAt || new Date().toISOString()),
     message: message.slice(0, 1200),
     contact: String(item.contact || "").trim().slice(0, 80) || undefined,
     path: String(item.path || "").trim().slice(0, 200) || undefined,
+    replies,
   };
 }
 
