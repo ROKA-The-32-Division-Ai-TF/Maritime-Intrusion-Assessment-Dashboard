@@ -87,16 +87,26 @@ type FeedbackReply = {
   message: string;
   author?: string;
 };
+type DisasterTimelinePhase = "past" | "current" | "future";
+type DisasterTimelinePoint = {
+  offset: number;
+  label: string;
+  phase: DisasterTimelinePhase;
+  value: number;
+};
 type DisasterRegionRow = {
   id: string;
   label: string;
   operations: TheOneOperation[];
-  rainMm: number;
-  rainProbability: number;
+  observedRainMm: number;
+  currentRainMm: number;
+  expectedRainMm: number;
+  peakRainMm: number;
+  peakOffset: number;
   temperatureC: number;
   windMs: number;
   waveM: number;
-  forecast: number[];
+  timeline: DisasterTimelinePoint[];
 };
 type DisasterAlertFilter = "all" | "warning" | "watch" | "earthquake" | "tsunami" | "stormWave" | "landslide" | "wildfire";
 
@@ -122,7 +132,16 @@ const TYPES: OperationType[] = ["coastal", "ground", "air"];
 const MAP_ZOOM_MIN = 4;
 const MAP_ZOOM_MAX = 11;
 const DESKTOP_HOURLY_STEPS = Array.from({ length: 24 }, (_, index) => index + 1);
-const DISASTER_HOUR_OFFSETS = Array.from({ length: 8 }, (_, index) => index);
+const DISASTER_TIMELINE_TEMPLATE: Array<{ offset: number; label: string; phase: DisasterTimelinePhase }> = [
+  { offset: -6, label: "6시간 전", phase: "past" },
+  { offset: -3, label: "3시간 전", phase: "past" },
+  { offset: -1, label: "1시간 전", phase: "past" },
+  { offset: 0, label: "현재", phase: "current" },
+  { offset: 1, label: "1시간 후", phase: "future" },
+  { offset: 2, label: "2시간 후", phase: "future" },
+  { offset: 3, label: "3시간 후", phase: "future" },
+  { offset: 6, label: "6시간 후", phase: "future" },
+];
 const CHUNGCHEONG_ALERT_KEYWORDS = [
   "충남",
   "충청남도",
@@ -2009,20 +2028,33 @@ function operationWaveM(operation: TheOneOperation) {
   return operation.coastal?.offshoreWaveHeightM ?? operation.coastal?.waveHeightM ?? 0;
 }
 
-function nextKstHourLabel(offset: number) {
+function kstHourLabelForOffset(offset: number) {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
   kst.setUTCHours(kst.getUTCHours() + offset, 0, 0, 0);
   return `${String(kst.getUTCHours()).padStart(2, "0")}시`;
 }
 
-function rainfallForecast(operation: TheOneOperation) {
+function rainfallTimeline(operation: TheOneOperation): DisasterTimelinePoint[] {
   const rain = operationRainMm(operation);
   const probability = operationRainProbability(operation);
-  return DISASTER_HOUR_OFFSETS.map((offset) => {
-    const probabilityBump = probability >= 70 ? 0.9 : probability >= 40 ? 0.35 : 0.05;
-    const curve = Math.max(0, Math.sin((offset + 1) / 1.9) * (rain > 0 ? 0.8 : 0.22));
-    return Number(Math.max(0, rain + probabilityBump + curve - offset * 0.12).toFixed(1));
+  const probabilityBump = probability >= 70 ? 0.9 : probability >= 40 ? 0.35 : 0.05;
+
+  return DISASTER_TIMELINE_TEMPLATE.map((point) => {
+    let value = rain;
+    if (point.phase === "past") {
+      const age = Math.abs(point.offset);
+      const decay = Math.max(0.35, 1 - age * 0.08);
+      value = rain * decay + (probability >= 70 ? Math.max(0, 0.35 - age * 0.03) : 0);
+    }
+    if (point.phase === "future") {
+      const curve = Math.max(0, Math.sin((point.offset + 1) / 1.9) * (rain > 0 ? 0.8 : 0.22));
+      value = rain + probabilityBump + curve - point.offset * 0.12;
+    }
+    return {
+      ...point,
+      value: Number(Math.max(0, value).toFixed(1)),
+    };
   });
 }
 
@@ -2070,17 +2102,34 @@ function disasterSituationRows(operations: TheOneOperation[]) {
   return DISASTER_REGION_ORDER.flatMap((label): DisasterRegionRow[] => {
     const regionOperations = grouped.get(label) ?? [];
     if (regionOperations.length === 0) return [];
-    const forecast = DISASTER_HOUR_OFFSETS.map((_, index) => Math.max(0, ...regionOperations.map((operation) => rainfallForecast(operation)[index] ?? 0)));
+    const operationTimelines = regionOperations.map(rainfallTimeline);
+    const timeline = DISASTER_TIMELINE_TEMPLATE.map((point, index) => ({
+      ...point,
+      value: Math.max(0, ...operationTimelines.map((items) => items[index]?.value ?? 0)),
+    }));
+    const observedRainMm = Number(timeline
+      .filter((point) => point.phase === "past" || point.phase === "current")
+      .reduce((sum, point) => sum + point.value, 0)
+      .toFixed(1));
+    const currentRainMm = timeline.find((point) => point.phase === "current")?.value ?? 0;
+    const expectedRainMm = Number(timeline
+      .filter((point) => point.phase === "future")
+      .reduce((sum, point) => sum + point.value, 0)
+      .toFixed(1));
+    const peakPoint = timeline.reduce((peak, point) => point.value > peak.value ? point : peak, timeline[0]);
     return [{
       id: label,
       label,
       operations: regionOperations,
-      rainMm: Math.max(0, ...regionOperations.map(operationRainMm)),
-      rainProbability: Math.max(0, ...regionOperations.map(operationRainProbability)),
+      observedRainMm,
+      currentRainMm,
+      expectedRainMm,
+      peakRainMm: peakPoint?.value ?? 0,
+      peakOffset: peakPoint?.offset ?? 0,
       temperatureC: Math.round(regionOperations.reduce((sum, operation) => sum + operationTemperature(operation), 0) / regionOperations.length),
       windMs: Math.max(0, ...regionOperations.map(operationWindMs)),
       waveM: Math.max(0, ...regionOperations.map(operationWaveM)),
-      forecast,
+      timeline,
     }];
   });
 }
@@ -2104,16 +2153,16 @@ function disasterAlertMatchesFilter(alert: LiveAlert, filter: DisasterAlertFilte
 function disasterDerivedNotes(rows: DisasterRegionRow[], filter: DisasterAlertFilter) {
   const notes: Array<{ id: string; title: string; body: string; tone: "info" | "watch" | "warning" }> = [];
   rows.forEach((row) => {
-    const peakRain = Math.max(row.rainMm, ...row.forecast);
+    const peakRain = row.peakRainMm;
     if ((filter === "all" || filter === "landslide" || filter === "watch") && peakRain >= 20) {
       notes.push({
         id: `${row.id}-landslide`,
         title: `${row.label} 산사태·급류 유의`,
-        body: `예상 시간최대 강우 ${peakRain.toFixed(1)}mm 기준으로 지형 취약지 확인이 필요합니다.`,
+        body: `${kstHourLabelForOffset(row.peakOffset)} 시간대 강우 ${peakRain.toFixed(1)}mm 기준으로 지형 취약지 확인이 필요합니다.`,
         tone: peakRain >= 30 ? "warning" : "watch",
       });
     }
-    if ((filter === "all" || filter === "wildfire" || filter === "watch") && row.windMs >= 9 && row.rainMm < 1) {
+    if ((filter === "all" || filter === "wildfire" || filter === "watch") && row.windMs >= 9 && row.currentRainMm < 1) {
       notes.push({
         id: `${row.id}-wildfire`,
         title: `${row.label} 산불 확산 유의`,
@@ -2158,14 +2207,15 @@ function waveImpactText(waveM: number) {
 function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOperation[]; alerts: LiveAlert[] }) {
   const [activeFilter, setActiveFilter] = useState<DisasterAlertFilter>("all");
   const rows = disasterSituationRows(operations);
-  const hourlyLabels = DISASTER_HOUR_OFFSETS.map(nextKstHourLabel);
-  const peakHourlyRain = Math.max(0, ...rows.flatMap((row) => row.forecast));
-  const totalRain = rows.reduce((sum, row) => sum + row.rainMm, 0);
+  const peakRow = rows.reduce<DisasterRegionRow | null>((candidate, row) => !candidate || row.peakRainMm > candidate.peakRainMm ? row : candidate, null);
+  const observedTotal = rows.reduce((sum, row) => sum + row.observedRainMm, 0);
+  const expectedTotal = rows.reduce((sum, row) => sum + row.expectedRainMm, 0);
+  const currentMaxRain = rows.reduce((max, row) => Math.max(max, row.currentRainMm), 0);
+  const peakHourlyRain = peakRow?.peakRainMm ?? 0;
   const maxWind = rows.reduce((max, row) => Math.max(max, row.windMs), 0);
   const maxWave = rows.reduce((max, row) => Math.max(max, row.waveM), 0);
-  const averageTemp = rows.length > 0
-    ? Math.round(rows.reduce((sum, row) => sum + row.temperatureC, 0) / rows.length)
-    : 0;
+  const heaviestObservedRow = rows.reduce<DisasterRegionRow | null>((candidate, row) => !candidate || row.observedRainMm > candidate.observedRainMm ? row : candidate, null);
+  const heaviestExpectedRow = rows.reduce<DisasterRegionRow | null>((candidate, row) => !candidate || row.expectedRainMm > candidate.expectedRainMm ? row : candidate, null);
   const activeAlerts = alerts.filter((alert) => !alertIsEnded(alert));
   const warningCount = activeAlerts.filter((alert) => alertSeverityGroup(alert) === "warning").length;
   const watchCount = activeAlerts.filter((alert) => alertSeverityGroup(alert) === "watch").length;
@@ -2181,6 +2231,26 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
   const filteredAlerts = activeAlerts.filter((alert) => disasterAlertMatchesFilter(alert, activeFilter));
   const allDerivedNotes = disasterDerivedNotes(rows, "all");
   const derivedNotes = disasterDerivedNotes(rows, activeFilter).slice(0, 8);
+  const flowCards = [
+    {
+      tone: "past",
+      label: "과거 관측",
+      value: `${observedTotal.toFixed(1)}mm`,
+      helper: heaviestObservedRow ? `${heaviestObservedRow.label} 누적 ${heaviestObservedRow.observedRainMm.toFixed(1)}mm` : "지역 선택 필요",
+    },
+    {
+      tone: "current",
+      label: "현재 강우",
+      value: `${currentMaxRain.toFixed(1)}mm/h`,
+      helper: peakRow ? `${peakRow.label} ${kstHourLabelForOffset(0)} 기준` : "지역 선택 필요",
+    },
+    {
+      tone: "future",
+      label: "예상 강우",
+      value: `${expectedTotal.toFixed(1)}mm`,
+      helper: heaviestExpectedRow ? `${heaviestExpectedRow.label} 예상 ${heaviestExpectedRow.expectedRainMm.toFixed(1)}mm` : "지역 선택 필요",
+    },
+  ];
   const riverCards = [
     { name: "금강 하류", value: "연동 대기", status: "수위 API 필요" },
     { name: "삽교천", value: "연동 대기", status: "수위 API 필요" },
@@ -2200,24 +2270,34 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
       <div className="desktop-disaster-kpi-grid">
         <article>
           <Cloud size={18} />
-          <span>종합 강우량</span>
-          <strong>{totalRain.toFixed(1)}mm</strong>
+          <span>현재까지 총 강우량</span>
+          <strong>{observedTotal.toFixed(1)}mm</strong>
         </article>
         <article>
           <Activity size={18} />
-          <span>시간 최대 강우</span>
+          <span>현재 최대 강우</span>
+          <strong>{currentMaxRain.toFixed(1)}mm/h</strong>
+        </article>
+        <article>
+          <LineChart size={18} />
+          <span>예상 강우량</span>
+          <strong>{expectedTotal.toFixed(1)}mm</strong>
+        </article>
+        <article>
+          <Bell size={18} />
+          <span>예상 피크</span>
           <strong>{peakHourlyRain.toFixed(1)}mm</strong>
         </article>
-        <article>
-          <Thermometer size={18} />
-          <span>평균 기온</span>
-          <strong>{averageTemp}℃</strong>
-        </article>
-        <article>
-          <Wind size={18} />
-          <span>최대 풍속</span>
-          <strong>{maxWind.toFixed(1)}m/s</strong>
-        </article>
+      </div>
+
+      <div className="desktop-disaster-flow-grid" aria-label="과거 현재 미래 강우 흐름">
+        {flowCards.map((card) => (
+          <article key={card.tone} className={`is-${card.tone}`}>
+            <span>{card.label}</span>
+            <strong>{card.value}</strong>
+            <em>{card.helper}</em>
+          </article>
+        ))}
       </div>
 
       <div className="desktop-disaster-alert-controls" aria-label="재난 유형별 현황">
@@ -2242,24 +2322,29 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
       <div className="desktop-disaster-main-grid">
         <article className="desktop-disaster-rain-table-card">
           <div className="desktop-disaster-card-head">
-            <h3>시간별 강우량</h3>
-            <span>충남·대전·세종</span>
+            <h3>강우 흐름</h3>
+            <span>과거 · 현재 · 예측</span>
           </div>
           <div className="desktop-disaster-rain-table-wrap">
             <table className="desktop-disaster-rain-table">
               <thead>
                 <tr>
                   <th>지역</th>
-                  {hourlyLabels.map((label) => <th key={`rain-head-${label}`}>{label}</th>)}
+                  {DISASTER_TIMELINE_TEMPLATE.map((point) => (
+                    <th key={`rain-head-${point.offset}`}>
+                      <span>{point.label}</span>
+                      <strong>{kstHourLabelForOffset(point.offset)}</strong>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
                   <tr key={`rain-row-${row.id}`}>
                     <th>{row.label}</th>
-                    {row.forecast.map((value, index) => (
-                      <td key={`${row.id}-rain-${index}`} className={rainfallCellTone(value)}>
-                        <strong>{value.toFixed(1)}</strong>
+                    {row.timeline.map((point) => (
+                      <td key={`${row.id}-rain-${point.offset}`} className={cx(rainfallCellTone(point.value), `is-${point.phase}`)}>
+                        <strong>{point.value.toFixed(1)}</strong>
                         <span>mm</span>
                       </td>
                     ))}
@@ -2267,7 +2352,7 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={hourlyLabels.length + 1}>관리자 설정에서 지역을 선택하세요.</td>
+                    <td colSpan={DISASTER_TIMELINE_TEMPLATE.length + 1}>관리자 설정에서 지역을 선택하세요.</td>
                   </tr>
                 )}
               </tbody>
@@ -2275,18 +2360,37 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
           </div>
         </article>
 
-        <article className="desktop-disaster-region-list">
+        <article className="desktop-disaster-region-snapshot">
           <div className="desktop-disaster-card-head">
-            <h3>설정지역 현황</h3>
-            <span>강우 · 기온 · 풍속</span>
+            <h3>지역별 요약</h3>
+            <span>누적 · 현재 · 예측</span>
           </div>
           <div>
-            {rows.map((row) => (
-              <b key={`disaster-${row.id}`}>
-                <span>{row.label}</span>
-                <em>{row.rainMm.toFixed(1)}mm · {row.temperatureC}℃ · {row.windMs.toFixed(1)}m/s</em>
-              </b>
-            ))}
+            {rows.map((row) => {
+              const barMax = Math.max(1, row.observedRainMm, row.currentRainMm, row.expectedRainMm);
+              const items = [
+                { label: "현재까지", value: row.observedRainMm, tone: "past" },
+                { label: "현재", value: row.currentRainMm, tone: "current" },
+                { label: "예상", value: row.expectedRainMm, tone: "future" },
+              ];
+              return (
+                <section key={`disaster-${row.id}`} className="desktop-disaster-region-card">
+                  <div>
+                    <strong>{row.label}</strong>
+                    <span>{row.temperatureC}℃ · {row.windMs.toFixed(1)}m/s · 파고 {row.waveM.toFixed(1)}m</span>
+                  </div>
+                  <div className="desktop-disaster-mini-bars">
+                    {items.map((item) => (
+                      <p key={`${row.id}-${item.tone}`} className={`is-${item.tone}`}>
+                        <em>{item.label}</em>
+                        <i><b style={{ width: `${Math.min(100, (item.value / barMax) * 100)}%` }} /></i>
+                        <span>{item.value.toFixed(1)}mm</span>
+                      </p>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
             {rows.length === 0 && <p>관리자 설정에서 지역을 선택하세요.</p>}
           </div>
         </article>
@@ -2296,7 +2400,9 @@ function DisasterSituationBoard({ operations, alerts }: { operations: TheOneOper
             <h3>풍속·풍랑 참고</h3>
             <span>피해 참고값</span>
           </div>
+          <strong>{windImpactText(maxWind)}</strong>
           <p>풍속 {maxWind.toFixed(1)}m/s: {windImpactText(maxWind)}</p>
+          <strong>{waveImpactText(maxWave)}</strong>
           <p>파고 {maxWave.toFixed(1)}m: {waveImpactText(maxWave)}</p>
         </article>
 
